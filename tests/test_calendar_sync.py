@@ -79,12 +79,15 @@ class SyncTests(unittest.TestCase):
                 sync.build_events(self.start, sync.APP_URL)
             google.assert_not_called()
 
-    def test_build_events_groups_by_coast_and_inland(self):
+    def test_build_events_covers_groups_and_spots(self):
         with patch.object(sync, 'forecast', return_value=ten_day_data_for()):
             desired = sync.build_events(self.start, sync.APP_URL)
-        self.assertEqual(set(desired), {'coast', 'inland'})
+        self.assertEqual(set(desired), {'coast', 'inland'} | {s['id'] for s in SPOTS})
         self.assertTrue(desired['coast'])
         self.assertTrue(desired['inland'])
+        # Every event lands in both its spot calendar and its region calendar.
+        self.assertEqual(desired['ijmuiden'], [e for e in desired['coast']
+                                                if e['extendedProperties']['private']['spot'] == 'ijmuiden'])
 
     def test_pagination_and_ownership_filter(self):
         api = sync.GoogleCalendar('test')

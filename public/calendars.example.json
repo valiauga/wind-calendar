@@ -1,4 +1,10 @@
 {
   "coast": "REPLACE_WITH_CALENDAR_ID@group.calendar.google.com",
-  "inland": "REPLACE_WITH_CALENDAR_ID@group.calendar.google.com"
+  "inland": "REPLACE_WITH_CALENDAR_ID@group.calendar.google.com",
+  "ijmuiden": "REPLACE_WITH_CALENDAR_ID@group.calendar.google.com",
+  "wijkaanzee": "REPLACE_WITH_CALENDAR_ID@group.calendar.google.com",
+  "maasvlakte": "REPLACE_WITH_CALENDAR_ID@group.calendar.google.com",
+  "muiderberg": "REPLACE_WITH_CALENDAR_ID@group.calendar.google.com",
+  "schellinkhout": "REPLACE_WITH_CALENDAR_ID@group.calendar.google.com",
+  "medemblik": "REPLACE_WITH_CALENDAR_ID@group.calendar.google.com"
 }

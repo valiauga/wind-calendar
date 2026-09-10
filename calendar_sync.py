@@ -139,10 +139,18 @@ def reconcile(api, calendar_id, desired, start, end):
     return counts
 
 
+def calendar_keys():
+    """Every calendar this app publishes to: one per group, plus one per spot,
+    so a subscriber can pick a whole region or an individual spot."""
+    return ['coast', 'inland'] + [s['id'] for s in SPOTS]
+
+
 def build_events(now, app_url, api_key=None, forecasts=None):
-    """One event list per group ('coast'/'inland'). Applies the reactive KNMI
-    correction (a no-op for spots with no mapped station) before qualifying windows."""
-    result = {'coast': [], 'inland': []}
+    """One event list per group ('coast'/'inland') AND per individual spot id --
+    each qualifying event is published to both its region calendar and its own
+    spot calendar. Applies the reactive KNMI correction (a no-op for spots with
+    no mapped station) before qualifying windows."""
+    result = {key: [] for key in calendar_keys()}
     for spot in SPOTS:
         data = forecast(spot)  # No stale fallback for calendar mutations.
         data = knmi_correction.apply(data, spot, now, api_key)
@@ -159,6 +167,7 @@ def build_events(now, app_url, api_key=None, forecasts=None):
             event = event_for(spot, block, app_url)
             if event_time(event, 'end') > now:
                 result[spot['group']].append(event)
+                result[spot['id']].append(event)
     return result
 
 
@@ -178,12 +187,13 @@ def main():
         return
     config = json.loads(os.environ['GOOGLE_CALENDAR_CONFIG'])
     ids = config['calendars']
-    if not ids.get('coast') or not ids.get('inland') or ids['coast'] == ids['inland']:
-        raise ValueError('Two distinct calendar IDs are required')
+    missing = [key for key in calendar_keys() if not ids.get(key)]
+    if missing:
+        raise ValueError('Missing calendar IDs for: ' + ', '.join(missing))
     api = GoogleCalendar.from_config(config)
     end = datetime.combine(now.date() + timedelta(days=10), time(), ZONE)
-    for group in ('coast', 'inland'):
-        print(group, reconcile(api, ids[group], desired[group], now, end))
+    for key in calendar_keys():
+        print(key, reconcile(api, ids[key], desired[key], now, end))
 
 
 if __name__ == '__main__':

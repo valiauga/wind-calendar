@@ -1,4 +1,20 @@
 [
-  { "id": "coast", "label": "Coast", "members": "IJmuiden, Wijk aan Zee, Slufter (Maasvlakte)" },
-  { "id": "inland", "label": "Inland", "members": "Muiderberg, Schellinkhout, Medemblik" }
+  {
+    "id": "coast",
+    "label": "Coast",
+    "spots": [
+      { "id": "ijmuiden", "label": "IJmuiden" },
+      { "id": "wijkaanzee", "label": "Wijk aan Zee" },
+      { "id": "maasvlakte", "label": "Slufter (Maasvlakte)" }
+    ]
+  },
+  {
+    "id": "inland",
+    "label": "Inland",
+    "spots": [
+      { "id": "muiderberg", "label": "Muiderberg" },
+      { "id": "schellinkhout", "label": "Schellinkhout" },
+      { "id": "medemblik", "label": "Medemblik" }
+    ]
+  }
 ]

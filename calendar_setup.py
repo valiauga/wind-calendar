@@ -14,7 +14,7 @@ import webbrowser
 from http.server import BaseHTTPRequestHandler, HTTPServer
 from pathlib import Path
 
-from calendar_sync import GoogleCalendar
+from calendar_sync import GoogleCalendar, calendar_keys
 
 SCOPE = 'https://www.googleapis.com/auth/calendar.app.created'
 DEFAULT_OUTPUT = Path.home() / '.config' / 'wind-calendar' / 'google-calendar.json'
@@ -127,28 +127,43 @@ def main():
         save(args.output, config)
     api = GoogleCalendar.from_config(config)
     needs_manual_sharing = []
-    labels = {'coast': 'Coast', 'inland': 'Inland'}
-    members = {'coast': [], 'inland': []}
+    group_labels = {'coast': 'Coast', 'inland': 'Inland'}
+    group_members = {'coast': [], 'inland': []}
     for spot in SPOTS:
-        members[spot['group']].append(spot['name'])
-    for group in ('coast', 'inland'):
-        if not config['calendars'].get(group):
+        group_members[spot['group']].append(spot['name'])
+    spot_by_id = {s['id']: s for s in SPOTS}
+
+    def summary_and_description(key):
+        if key in group_labels:
+            return ('Wind Calendar — ' + group_labels[key],
+                    'Shared kitesurfing forecast opportunities for '
+                    + ', '.join(group_members[key]) + '. Events are free time.')
+        spot = spot_by_id[key]
+        return ('Wind Calendar — ' + spot['name'],
+                'Shared kitesurfing forecast opportunities for '
+                + spot['name'] + '. Events are free time.')
+
+    def display_name(key):
+        return group_labels.get(key, spot_by_id[key]['name'] if key in spot_by_id else key)
+
+    for key in calendar_keys():
+        is_new = not config['calendars'].get(key)
+        if is_new:
+            summary, description = summary_and_description(key)
             calendar = api.request('POST', '/calendars', {
-                'summary': 'Wind Calendar — ' + labels[group],
-                'description': 'Shared kitesurfing forecast opportunities for '
-                               + ', '.join(members[group]) + '. Events are free time.',
+                'summary': summary, 'description': description,
                 'timeZone': 'Europe/Amsterdam',
             })
-            config['calendars'][group] = calendar['id']
+            config['calendars'][key] = calendar['id']
             save(args.output, config)
-        try:
-            make_public(api, config['calendars'][group])
-        except RuntimeError as error:
-            print(str(error))
-            needs_manual_sharing.append(labels[group])
-        print(labels[group] + ' (' + ', '.join(members[group]) + '): '
-              'https://calendar.google.com/calendar/render?cid=' +
-              urllib.parse.quote(config['calendars'][group], safe=''))
+        if is_new:
+            try:
+                make_public(api, config['calendars'][key])
+            except RuntimeError as error:
+                print(str(error))
+                needs_manual_sharing.append(display_name(key))
+        print(display_name(key) + ': https://calendar.google.com/calendar/render?cid=' +
+              urllib.parse.quote(config['calendars'][key], safe=''))
     print('Saved private configuration to ' + str(args.output))
     print('Copy the "calendars" mapping above into public/calendars.json for the frontend, '
           'and set GOOGLE_CALENDAR_CONFIG in Render from the full file at ' + str(args.output) + '.')

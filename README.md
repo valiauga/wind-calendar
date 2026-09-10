@@ -29,16 +29,19 @@ Cron Jobs can't mount a persistent disk anyway.
 
 ## v1 spots
 
-Two calendars, grouped by `spots.json`'s `group` field:
+Eight calendars: one per region plus one per individual spot, grouped by
+`spots.json`'s `group` field. Every qualifying event is published to both its spot
+calendar and its region calendar (`calendar_sync.calendar_keys()`), so a subscriber
+can add a whole region in one click or pick just the spots they care about.
 
 - **Coast**: IJmuiden, Wijk aan Zee (proxy via IJmuiden), Slufter/Maasvlakte (via
   Lichteiland Goeree)
 - **Inland**: Muiderberg, Schellinkhout, Medemblik
 
-This started as one calendar per spot for exact selection, but in practice six
-separate "Add" buttons was too much friction for a casual visitor — two calendars is
-the simpler tradeoff, accepting that a coast subscriber sees all three coastal spots
-even if they only care about one.
+This went from one-calendar-per-spot (too much friction for a casual visitor: six
+flat "Add" buttons) to two region calendars (simpler, but no way to pick just one
+spot) to this: both, with the subscribe page presenting spots nested under their
+region so either granularity is one click away.
 
 Excluded for now, revisit if the situation changes: **Zandvoort** (no verified
 coordinates/thresholds yet), **Trintelhaven** (banned for kiting most of the year per
