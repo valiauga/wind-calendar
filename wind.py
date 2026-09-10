@@ -69,7 +69,7 @@ def _forecast(spot, allow_stale):
         'daily': 'sunrise,sunset', 'wind_speed_unit': 'kn',
         'timezone': 'Europe/Amsterdam', 'forecast_days': 10,
         'models': 'gfs_seamless',
-        'cell_selection': 'sea',
+        'cell_selection': 'sea' if spot['group'] == 'coast' else 'nearest',
     })
     try:
         req = urllib.request.Request('https://api.open-meteo.com/v1/forecast?' + params,

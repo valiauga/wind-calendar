@@ -140,9 +140,9 @@ def reconcile(api, calendar_id, desired, start, end):
 
 
 def build_events(now, app_url, api_key=None, forecasts=None):
-    """One event list per spot id. Applies the reactive KNMI correction (a no-op for
-    spots with no mapped station) before qualifying windows."""
-    result = {}
+    """One event list per group ('coast'/'inland'). Applies the reactive KNMI
+    correction (a no-op for spots with no mapped station) before qualifying windows."""
+    result = {'coast': [], 'inland': []}
     for spot in SPOTS:
         data = forecast(spot)  # No stale fallback for calendar mutations.
         data = knmi_correction.apply(data, spot, now, api_key)
@@ -155,12 +155,10 @@ def build_events(now, app_url, api_key=None, forecasts=None):
         for day in required:
             if sum(t.startswith(day) for t in data['hourly']['time']) < 23:
                 raise ValueError('Incomplete forecast day')
-        events = []
         for block in windows(spot, data, now.date()):
             event = event_for(spot, block, app_url)
             if event_time(event, 'end') > now:
-                events.append(event)
-        result[spot['id']] = events
+                result[spot['group']].append(event)
     return result
 
 
@@ -180,13 +178,12 @@ def main():
         return
     config = json.loads(os.environ['GOOGLE_CALENDAR_CONFIG'])
     ids = config['calendars']
-    missing = [s['id'] for s in SPOTS if not ids.get(s['id'])]
-    if missing:
-        raise ValueError('Missing calendar IDs for: ' + ', '.join(missing))
+    if not ids.get('coast') or not ids.get('inland') or ids['coast'] == ids['inland']:
+        raise ValueError('Two distinct calendar IDs are required')
     api = GoogleCalendar.from_config(config)
     end = datetime.combine(now.date() + timedelta(days=10), time(), ZONE)
-    for spot in SPOTS:
-        print(spot['id'], reconcile(api, ids[spot['id']], desired[spot['id']], now, end))
+    for group in ('coast', 'inland'):
+        print(group, reconcile(api, ids[group], desired[group], now, end))
 
 
 if __name__ == '__main__':

@@ -127,23 +127,28 @@ def main():
         save(args.output, config)
     api = GoogleCalendar.from_config(config)
     needs_manual_sharing = []
+    labels = {'coast': 'Coast', 'inland': 'Inland'}
+    members = {'coast': [], 'inland': []}
     for spot in SPOTS:
-        if not config['calendars'].get(spot['id']):
+        members[spot['group']].append(spot['name'])
+    for group in ('coast', 'inland'):
+        if not config['calendars'].get(group):
             calendar = api.request('POST', '/calendars', {
-                'summary': 'Wind — ' + spot['name'],
-                'description': 'Shared kitesurfing forecast opportunities for ' + spot['name']
-                               + ' from Wind Calendar. Events are free time.',
+                'summary': 'Wind Calendar — ' + labels[group],
+                'description': 'Shared kitesurfing forecast opportunities for '
+                               + ', '.join(members[group]) + '. Events are free time.',
                 'timeZone': 'Europe/Amsterdam',
             })
-            config['calendars'][spot['id']] = calendar['id']
+            config['calendars'][group] = calendar['id']
             save(args.output, config)
         try:
-            make_public(api, config['calendars'][spot['id']])
+            make_public(api, config['calendars'][group])
         except RuntimeError as error:
             print(str(error))
-            needs_manual_sharing.append(spot['name'])
-        print(spot['name'] + ': https://calendar.google.com/calendar/render?cid=' +
-              urllib.parse.quote(config['calendars'][spot['id']], safe=''))
+            needs_manual_sharing.append(labels[group])
+        print(labels[group] + ' (' + ', '.join(members[group]) + '): '
+              'https://calendar.google.com/calendar/render?cid=' +
+              urllib.parse.quote(config['calendars'][group], safe=''))
     print('Saved private configuration to ' + str(args.output))
     print('Copy the "calendars" mapping above into public/calendars.json for the frontend, '
           'and set GOOGLE_CALENDAR_CONFIG in Render from the full file at ' + str(args.output) + '.')

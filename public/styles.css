@@ -10,6 +10,7 @@ a { color: #97c5ff; text-underline-offset: 3px; }
 .spot { display: flex; align-items: center; justify-content: space-between; gap: 16px;
         padding: 16px 0; border-bottom: 1px solid #2a2a2a; flex-wrap: wrap; }
 .spot .name { font-size: 17px; }
+.spot .members { display: block; font-size: 13px; color: #9c9c98; font-weight: normal; margin-top: 2px; }
 .spot .links { display: flex; gap: 20px; font-size: 14px; white-space: nowrap; }
 .error { padding: 16px 0; color: #9c9c98; }
 .about { color: #b6b6b2; font-size: 14px; }

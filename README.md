@@ -5,17 +5,19 @@ forecast/qualification/calendar-push logic in
 [wind-window-frame](https://github.com/valiauga/wind-window-frame), repackaged as a
 standalone public feature: no personal display, no OAuth for subscribers, no database.
 
-Anyone can add a spot's calendar to their own Google Calendar (or subscribe via ICS in
-Apple Calendar / Outlook) and see qualified wind sessions pushed there automatically.
+Anyone can add the coast or inland calendar to their own Google Calendar (or subscribe
+via ICS in Apple Calendar / Outlook) and see qualified wind sessions pushed there
+automatically.
 
 ## Architecture
 
 Two Render resources, one repo:
 
 - **Cron Job** (`calendar_sync.py`, hourly): fetches forecasts, applies the reactive
-  KNMI correction, qualifies wind windows, and reconciles events into each spot's
-  public Google Calendar. Render Cron Jobs bill per minute with a $1/month floor —
-  expect to land at that floor for an hourly ~1-2 minute run.
+  KNMI correction, qualifies wind windows, and reconciles events into the coast or
+  inland public Google Calendar (grouped by each spot's `group` in `spots.json`).
+  Render Cron Jobs bill per minute with a $1/month floor — expect to land at that
+  floor for an hourly ~1-2 minute run.
 - **Static Site** (`public/`): the spot picker. Static sites don't spin down and are
   free with a 100GB/month bandwidth cap at the workspace level — no backend call is
   needed to render the subscribe links, since calendar IDs are fixed at deploy time
@@ -27,11 +29,16 @@ Cron Jobs can't mount a persistent disk anyway.
 
 ## v1 spots
 
-IJmuiden, Wijk aan Zee (proxy via IJmuiden), Slufter/Maasvlakte (via Lichteiland
-Goeree), Muiderberg, Schellinkhout, Medemblik. Each has its own calendar
-(`spots.json`) — one calendar per spot, not regional clusters, since kiting
-conditions are spot-specific enough that clustering would put irrelevant sessions on
-a subscriber's calendar.
+Two calendars, grouped by `spots.json`'s `group` field:
+
+- **Coast**: IJmuiden, Wijk aan Zee (proxy via IJmuiden), Slufter/Maasvlakte (via
+  Lichteiland Goeree)
+- **Inland**: Muiderberg, Schellinkhout, Medemblik
+
+This started as one calendar per spot for exact selection, but in practice six
+separate "Add" buttons was too much friction for a casual visitor — two calendars is
+the simpler tradeoff, accepting that a coast subscriber sees all three coastal spots
+even if they only care about one.
 
 Excluded for now, revisit if the situation changes: **Zandvoort** (no verified
 coordinates/thresholds yet), **Trintelhaven** (banned for kiting most of the year per
@@ -76,9 +83,9 @@ Render). No third-party Python packages are required.
    ```sh
    python3 calendar_setup.py /absolute/path/to/client_secret.json
    ```
-   Authorize your Google account in the browser. This creates one calendar per spot,
-   attempts to make each public via the Calendar API's ACL (`scope: default`), and
-   stores the refresh token and calendar IDs in
+   Authorize your Google account in the browser. This creates the coast and inland
+   calendars, attempts to make each public via the Calendar API's ACL (`scope:
+   default`), and stores the refresh token and calendar IDs in
    `~/.config/wind-calendar/google-calendar.json` with owner-only permissions.
    If the public-ACL write is rejected (403), share that calendar manually instead:
    **Settings and sharing > Access permissions > Make available to public.**

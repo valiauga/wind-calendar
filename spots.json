@@ -13,7 +13,8 @@
     "maxGustFactor": 1.4,
     "openWindows": [{ "from": "01-01", "to": "12-31" }],
     "knmiStationId": "0-20000-0-06225",
-    "knmiStationNote": "dedicated"
+    "knmiStationNote": "dedicated",
+    "group": "coast"
   },
   {
     "id": "wijkaanzee",
@@ -29,7 +30,8 @@
     "maxGustFactor": 1.4,
     "openWindows": [{ "from": "01-01", "to": "12-31" }],
     "knmiStationId": "0-20000-0-06225",
-    "knmiStationNote": "proxy: IJmuiden, no dedicated station"
+    "knmiStationNote": "proxy: IJmuiden, no dedicated station",
+    "group": "coast"
   },
   {
     "id": "maasvlakte",
@@ -45,7 +47,8 @@
     "maxGustFactor": 1.4,
     "openWindows": [{ "from": "01-01", "to": "12-31" }],
     "knmiStationId": "0-20000-0-06320",
-    "knmiStationNote": "dedicated: Lichteiland Goeree (offshore platform)"
+    "knmiStationNote": "dedicated: Lichteiland Goeree (offshore platform)",
+    "group": "coast"
   },
   {
     "id": "muiderberg",
@@ -61,7 +64,8 @@
     "maxGustFactor": 1.4,
     "openWindows": [{ "from": "01-01", "to": "12-31" }],
     "knmiStationId": null,
-    "knmiStationNote": "no KNMI station; nearest is Pampus (third-party marine sensor network) - no reactive correction in v1"
+    "knmiStationNote": "no KNMI station; nearest is Pampus (third-party marine sensor network) - no reactive correction in v1",
+    "group": "inland"
   },
   {
     "id": "schellinkhout",
@@ -77,7 +81,8 @@
     "maxGustFactor": 1.4,
     "openWindows": [{ "from": "01-01", "to": "12-31" }],
     "knmiStationId": null,
-    "knmiStationNote": "dedicated station is NKV-operated, not KNMI - no confirmed public feed, no reactive correction in v1"
+    "knmiStationNote": "dedicated station is NKV-operated, not KNMI - no confirmed public feed, no reactive correction in v1",
+    "group": "inland"
   },
   {
     "id": "medemblik",
@@ -93,6 +98,7 @@
     "maxGustFactor": 1.4,
     "openWindows": [{ "from": "04-01", "to": "09-30" }],
     "knmiStationId": null,
-    "knmiStationNote": "dedicated station is NKV-operated, not KNMI - no confirmed public feed, no reactive correction in v1"
+    "knmiStationNote": "dedicated station is NKV-operated, not KNMI - no confirmed public feed, no reactive correction in v1",
+    "group": "inland"
   }
 ]

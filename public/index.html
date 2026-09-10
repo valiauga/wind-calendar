@@ -11,16 +11,16 @@
 <main>
   <h1>Wind Calendar</h1>
   <p class="lede">Kitesurfing wind windows for Dutch spots, pushed straight into a Google Calendar
-    you subscribe to. No account, no app, no sign-in &mdash; pick your spots below.</p>
+    you subscribe to. No account, no app, no sign-in &mdash; pick coast or inland below.</p>
 
   <ul id="spots" class="spots"></ul>
 
   <section class="about">
     <h2>How it works</h2>
-    <p>Each spot has its own public calendar. <strong>Add to Google Calendar</strong> adds it
-      directly if you use Google Calendar. For Apple Calendar, Outlook or anything else, use the
-      <strong>ICS</strong> link instead &mdash; those refresh roughly once a day, on that app's own
-      schedule, not something this site controls.</p>
+    <p>Coast and inland spots each have their own public calendar. <strong>Add to Google
+      Calendar</strong> adds it directly if you use Google Calendar. For Apple Calendar, Outlook or
+      anything else, use the <strong>ICS</strong> link instead &mdash; those refresh roughly once a
+      day, on that app's own schedule, not something this site controls.</p>
     <p>Events show the spot, forecast peak sustained wind and direction. They carry no attendees,
       no reminders, and are marked as free time. Forecasts update roughly hourly from GFS model
       data, with a live correction applied where a nearby KNMI weather station is available.</p>
@@ -47,7 +47,7 @@ async function init() {
     const addUrl = 'https://calendar.google.com/calendar/render?cid=' + encoded;
     const icsUrl = 'webcal://calendar.google.com/calendar/ical/' + encoded + '/public/basic.ics';
     return `<li class="spot">
-      <span class="name">${spot.label}</span>
+      <span class="name">${spot.label}<span class="members">${spot.members}</span></span>
       <span class="links">
         <a href="${addUrl}" target="_blank" rel="noopener">Add to Google Calendar</a>
         <a href="${icsUrl}">ICS</a>
