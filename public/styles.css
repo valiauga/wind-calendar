@@ -15,8 +15,9 @@ a { color: #97c5ff; text-underline-offset: 3px; }
 .spot .pick { font-size: 15px; color: #d6d6d2; padding-left: 4px; display: flex;
               align-items: center; gap: 10px; cursor: pointer; }
 .spot .pick input { width: 16px; height: 16px; accent-color: #97c5ff; }
-.region-label { margin: 32px 0 0; }
-.region-label:first-of-type { margin-top: 0; }
+.region { margin-top: 32px; }
+.region:first-child { margin-top: 0; }
+.region-label { margin: 0; }
 .custom-mix { display: flex; align-items: center; gap: 16px; flex-wrap: wrap;
               padding: 12px 0 32px; font-size: 14px; }
 .custom-mix .name { font-weight: bold; }

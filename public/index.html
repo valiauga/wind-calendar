@@ -102,18 +102,20 @@ async function init() {
     return;
   }
   container.innerHTML = regions.map(region => `
-    <h2 class="region-label">${region.label}</h2>
-    <ul class="spots">
-      ${regionRow(region, calendars[region.id])}
-      ${region.spots.map(spot => spotRow(spot, calendars[spot.id])).join('')}
-    </ul>
-    <div class="custom-mix" data-region="${region.id}">
-      <span class="name">Custom mix</span>
-      <a class="feed-link" aria-disabled="true">Subscribe to selected spots</a>
-      <span class="hint">Check one or more spots above to build a custom feed.</span>
-    </div>
+    <section class="region" data-region="${region.id}">
+      <h2 class="region-label">${region.label}</h2>
+      <ul class="spots">
+        ${regionRow(region, calendars[region.id])}
+        ${region.spots.map(spot => spotRow(spot, calendars[spot.id])).join('')}
+      </ul>
+      <div class="custom-mix">
+        <span class="name">Custom mix</span>
+        <a class="feed-link" aria-disabled="true">Subscribe to selected spots</a>
+        <span class="hint">Check one or more spots above to build a custom feed.</span>
+      </div>
+    </section>
   `).join('') || '<p class="error">No calendars configured yet.</p>';
-  container.querySelectorAll('.custom-mix').forEach(el => wireCustomMix(el, el.dataset.region));
+  container.querySelectorAll('.region').forEach(el => wireCustomMix(el, el.dataset.region));
 }
 init();
 </script>
