@@ -126,6 +126,7 @@ def main():
         config['refresh_token'] = authorize(client)
         save(args.output, config)
     api = GoogleCalendar.from_config(config)
+    needs_manual_sharing = []
     for spot in SPOTS:
         if not config['calendars'].get(spot['id']):
             calendar = api.request('POST', '/calendars', {
@@ -136,12 +137,19 @@ def main():
             })
             config['calendars'][spot['id']] = calendar['id']
             save(args.output, config)
-        make_public(api, config['calendars'][spot['id']])
+        try:
+            make_public(api, config['calendars'][spot['id']])
+        except RuntimeError as error:
+            print(str(error))
+            needs_manual_sharing.append(spot['name'])
         print(spot['name'] + ': https://calendar.google.com/calendar/render?cid=' +
               urllib.parse.quote(config['calendars'][spot['id']], safe=''))
     print('Saved private configuration to ' + str(args.output))
     print('Copy the "calendars" mapping above into public/calendars.json for the frontend, '
           'and set GOOGLE_CALENDAR_CONFIG in Render from the full file at ' + str(args.output) + '.')
+    if needs_manual_sharing:
+        print('Share these manually (Settings and sharing > Access permissions > '
+              '"Make available to public"): ' + ', '.join(needs_manual_sharing))
 
 
 if __name__ == '__main__':
