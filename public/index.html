@@ -1,0 +1,61 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="theme-color" content="#121212">
+  <title>Wind Calendar</title>
+  <link rel="stylesheet" href="styles.css">
+</head>
+<body>
+<main>
+  <h1>Wind Calendar</h1>
+  <p class="lede">Kitesurfing wind windows for Dutch spots, pushed straight into a Google Calendar
+    you subscribe to. No account, no app, no sign-in &mdash; pick your spots below.</p>
+
+  <ul id="spots" class="spots"></ul>
+
+  <section class="about">
+    <h2>How it works</h2>
+    <p>Each spot has its own public calendar. <strong>Add to Google Calendar</strong> adds it
+      directly if you use Google Calendar. For Apple Calendar, Outlook or anything else, use the
+      <strong>ICS</strong> link instead &mdash; those refresh roughly once a day, on that app's own
+      schedule, not something this site controls.</p>
+    <p>Events show the spot, forecast peak sustained wind and direction. They carry no attendees,
+      no reminders, and are marked as free time. Forecasts update roughly hourly from GFS model
+      data, with a live correction applied where a nearby KNMI weather station is available.</p>
+    <p><a href="privacy.html">Privacy policy</a></p>
+  </section>
+</main>
+<script>
+async function init() {
+  const list = document.getElementById('spots');
+  let spots, calendars;
+  try {
+    [spots, calendars] = await Promise.all([
+      fetch('spots.json').then(r => r.json()),
+      fetch('calendars.json').then(r => r.json()),
+    ]);
+  } catch {
+    list.innerHTML = '<li class="error">Could not load spot list. Try reloading.</li>';
+    return;
+  }
+  list.innerHTML = spots.map(spot => {
+    const cid = calendars[spot.id];
+    if (!cid) return '';
+    const encoded = encodeURIComponent(cid);
+    const addUrl = 'https://calendar.google.com/calendar/render?cid=' + encoded;
+    const icsUrl = 'webcal://calendar.google.com/calendar/ical/' + encoded + '/public/basic.ics';
+    return `<li class="spot">
+      <span class="name">${spot.label}</span>
+      <span class="links">
+        <a href="${addUrl}" target="_blank" rel="noopener">Add to Google Calendar</a>
+        <a href="${icsUrl}">ICS</a>
+      </span>
+    </li>`;
+  }).join('') || '<li class="error">No calendars configured yet.</li>';
+}
+init();
+</script>
+</body>
+</html>

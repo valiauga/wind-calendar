@@ -1,0 +1,51 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="theme-color" content="#121212">
+  <title>Privacy · Wind Calendar</title>
+  <link rel="stylesheet" href="styles.css">
+</head>
+<body>
+<main>
+  <a href="/">← Wind Calendar</a>
+  <h1>Privacy policy</h1>
+  <p class="lede">Wind Calendar is a kitesurfing forecast project maintained by Lukas Valiauga.
+    It publishes forecast events to a small set of public, per-spot Google calendars.</p>
+
+  <h2>Google Calendar access</h2>
+  <p>Only the calendar owner authorizes the app. The app requests
+    <code>calendar.app.created</code> permission to create its wind calendars and
+    read, create, update and delete events on those calendars. It does not request
+    access to your personal, work or family calendars, Gmail or contacts.</p>
+  <p>Subscribing to a calendar is a normal Google Calendar action ("add this calendar") &mdash;
+    it never asks you to sign in to this site or grants this app any access to your account.</p>
+
+  <h2>Storage and service providers</h2>
+  <p>Google stores the calendars and their events. The owner's authorization configuration is
+    stored locally with owner-only file permissions and, for automatic syncing, as an encrypted
+    Render environment variable. Render hosts the website and runs the hourly sync job.
+    Open-Meteo receives forecast requests for the predefined spots. KNMI's public observations
+    API is used server-side, via an API key, to nudge near-term forecasts toward current
+    conditions at spots with a nearby weather station; no visitor data is sent to KNMI.</p>
+  <p>The site includes no advertising or visitor analytics.</p>
+
+  <h2>Use and sharing</h2>
+  <p>Google data is used only to publish and maintain these calendars. It is not sold, used
+    for advertising or used to train AI models. Wind Calendar's use and transfer of information
+    received from Google APIs adheres to the
+    <a href="https://developers.google.com/terms/api-services-user-data-policy">Google API Services User Data Policy</a>,
+    including its Limited Use requirements.</p>
+
+  <h2>Retention and controls</h2>
+  <p>Obsolete future forecast events are removed during successful syncs; past events remain
+    until the owner deletes them. Unsubscribe at any time in your own calendar app &mdash; that
+    only removes your subscription, it doesn't affect the shared calendar.</p>
+
+  <h2>Questions</h2>
+  <p>Contact the maintainer through the project's issue tracker, or the support email shown
+    on the Google authorization screen.</p>
+</main>
+</body>
+</html>

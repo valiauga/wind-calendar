@@ -1,0 +1,8 @@
+.forecast-cache/
+__pycache__/
+.DS_Store
+
+.env
+.env.*
+client_secret*.json
+google-calendar*.json

@@ -1,0 +1,12 @@
+services:
+  - type: cron
+    name: wind-calendar-sync
+    runtime: python
+    schedule: "5 * * * *"
+    buildCommand: ""
+    startCommand: python3 calendar_sync.py
+  - type: web
+    name: wind-calendar
+    runtime: static
+    buildCommand: ""
+    staticPublishPath: ./public
