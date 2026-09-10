@@ -17,6 +17,9 @@ a { color: #97c5ff; text-underline-offset: 3px; }
 .subscribe-row { display: flex; align-items: center; gap: 20px; flex-wrap: wrap; font-size: 14px; }
 .subscribe-row a.add-link { font-size: 16px; }
 .subscribe-row a[aria-disabled] { color: #6b6b68; pointer-events: none; text-decoration: none; }
+.subscribe-row button.copy-link { font: inherit; font-size: 16px; color: #97c5ff; background: none;
+                                   border: none; padding: 0; cursor: pointer; text-decoration: underline;
+                                   text-underline-offset: 3px; text-align: left; }
 .subscribe-row .hint { color: #9c9c98; }
 .error { padding: 16px 0; color: #9c9c98; }
 .about { color: #b6b6b2; font-size: 14px; }

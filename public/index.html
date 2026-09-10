@@ -22,8 +22,13 @@
       Calendar, Outlook or anything else). Uncheck any spots you don't care about and the button
       switches to a custom feed combining just what's checked.</p>
     <p>A custom mix can't use the native one-click "Add" button &mdash; that only works for a
-      calendar that already exists with fixed content. Instead it's a URL subscription: in Google
-      Calendar use Other calendars &rarr; From URL; elsewhere just open the link.</p>
+      calendar that already exists with fixed content, and Google only offers it for calendars it
+      already hosts. Instead you get a link: <strong>Open in Calendar app</strong> hands it to
+      whatever your device's default calendar is (on a Mac that's usually Apple Calendar, even if
+      you use Google Calendar day to day &mdash; that's an OS-level setting, not something this site
+      controls). To get a custom mix into <em>Google</em> Calendar specifically, use <strong>Copy
+      link</strong> and paste it into Google Calendar's own Settings &rarr; Add calendar &rarr; From
+      URL.</p>
     <p>Events show the spot, forecast peak sustained wind and direction. They carry no attendees,
       no reminders, and are marked as free time. Forecasts update roughly hourly from GFS model
       data, with a live correction applied where a nearby KNMI weather station is available. A
@@ -40,7 +45,6 @@ function nativeLinks(cid) {
   return {
     add: 'https://calendar.google.com/calendar/render?cid=' + encoded,
     ics: 'webcal://calendar.google.com/calendar/ical/' + encoded + '/public/basic.ics',
-    label: 'Add to Google Calendar',
   };
 }
 
@@ -48,9 +52,8 @@ function customLinks(spotIds) {
   const query = 'spots=' + spotIds.map(encodeURIComponent).join(',');
   const host = FEED_ORIGIN.replace(/^https?:\/\//, '');
   return {
-    add: 'webcal://' + host + '/feed.ics?' + query,
-    ics: 'https://' + host + '/feed.ics?' + query,
-    label: 'Subscribe to selected spots',
+    ics: 'webcal://' + host + '/feed.ics?' + query,
+    plain: 'https://' + host + '/feed.ics?' + query,
   };
 }
 
@@ -58,26 +61,49 @@ function wireRegion(sectionEl, region, calendars) {
   const boxes = [...sectionEl.querySelectorAll('input[data-spot]')];
   const addLink = sectionEl.querySelector('a.add-link');
   const icsLink = sectionEl.querySelector('a.ics-link');
+  const copyBtn = sectionEl.querySelector('button.copy-link');
   const hint = sectionEl.querySelector('.hint');
 
   function update() {
     const picked = boxes.filter(b => b.checked).map(b => b.dataset.spot);
+    copyBtn.textContent = 'Copy link for Google Calendar';
     if (!picked.length) {
+      addLink.hidden = false;
       addLink.removeAttribute('href');
-      icsLink.removeAttribute('href');
       addLink.setAttribute('aria-disabled', 'true');
-      icsLink.setAttribute('aria-disabled', 'true');
       addLink.textContent = 'Add to Google Calendar';
+      icsLink.removeAttribute('href');
+      icsLink.setAttribute('aria-disabled', 'true');
+      copyBtn.hidden = true;
       hint.textContent = 'Check at least one spot to subscribe.';
       return;
     }
     const allPicked = picked.length === boxes.length;
-    const { add, ics, label } = allPicked ? nativeLinks(calendars[region.id]) : customLinks(picked);
-    addLink.href = add;
-    icsLink.href = ics;
-    addLink.textContent = label;
-    addLink.removeAttribute('aria-disabled');
     icsLink.removeAttribute('aria-disabled');
+    if (allPicked) {
+      const { add, ics } = nativeLinks(calendars[region.id]);
+      addLink.hidden = false;
+      addLink.href = add;
+      addLink.textContent = 'Add to Google Calendar';
+      addLink.removeAttribute('aria-disabled');
+      icsLink.href = ics;
+      icsLink.textContent = 'Open in Calendar app';
+      copyBtn.hidden = true;
+    } else {
+      const { ics, plain } = customLinks(picked);
+      addLink.hidden = true;
+      icsLink.href = ics;
+      icsLink.textContent = 'Open in Calendar app';
+      copyBtn.hidden = false;
+      copyBtn.onclick = async () => {
+        try {
+          await navigator.clipboard.writeText(plain);
+          copyBtn.textContent = 'Copied! Paste into Google Calendar → Settings → Add calendar → From URL';
+        } catch {
+          copyBtn.textContent = plain;
+        }
+      };
+    }
     hint.textContent = allPicked
       ? `All of ${region.label}.`
       : picked.length + ' spot' + (picked.length > 1 ? 's' : '') + ' selected.';
@@ -108,7 +134,8 @@ async function init() {
       </ul>
       <div class="subscribe-row">
         <a class="add-link" target="_blank" rel="noopener"></a>
-        <a class="ics-link">ICS</a>
+        <button type="button" class="copy-link" hidden></button>
+        <a class="ics-link"></a>
         <span class="hint"></span>
       </div>
     </section>
