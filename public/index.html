@@ -11,79 +11,76 @@
 <main>
   <h1>Wind Calendar</h1>
   <p class="lede">Kitesurfing wind windows for Dutch spots, pushed straight into a Google Calendar
-    you subscribe to. No account, no app, no sign-in &mdash; add a whole region, or check just the
-    spots you care about for a custom mix.</p>
+    you subscribe to. No account, no app, no sign-in &mdash; pick your spots per region below.</p>
 
   <div id="regions"></div>
 
   <section class="about">
     <h2>How it works</h2>
-    <p>Each region and each individual spot has its own public calendar. <strong>Add to Google
-      Calendar</strong> adds one directly if you use Google Calendar; the <strong>ICS</strong> link
-      works for Apple Calendar, Outlook or anything else.</p>
-    <p>Checking spots below builds a <strong>custom feed</strong> combining just those spots into
-      one calendar. Since it's built on the fly rather than being a fixed calendar, it only works
-      as a URL subscription (Google Calendar: Other calendars &rarr; From URL; Apple/Outlook: use
-      the link directly) &mdash; there's no native one-click "Add" button for a custom mix.</p>
+    <p>Every spot is checked by default, so <strong>Add to Google Calendar</strong> adds the whole
+      region in one click if you use Google Calendar (the <strong>ICS</strong> link works for Apple
+      Calendar, Outlook or anything else). Uncheck any spots you don't care about and the button
+      switches to a custom feed combining just what's checked.</p>
+    <p>A custom mix can't use the native one-click "Add" button &mdash; that only works for a
+      calendar that already exists with fixed content. Instead it's a URL subscription: in Google
+      Calendar use Other calendars &rarr; From URL; elsewhere just open the link.</p>
     <p>Events show the spot, forecast peak sustained wind and direction. They carry no attendees,
       no reminders, and are marked as free time. Forecasts update roughly hourly from GFS model
-      data, with a live correction applied where a nearby KNMI weather station is available. Feeds
-      not fetched directly from Google (the ICS links and any custom mix) refresh roughly once a
-      day, on that app's own schedule, not something this site controls.</p>
+      data, with a live correction applied where a nearby KNMI weather station is available. A
+      custom mix (and any ICS link) refreshes roughly once a day, on that app's own schedule, not
+      something this site controls.</p>
     <p><a href="privacy.html">Privacy policy</a></p>
   </section>
 </main>
 <script>
 const FEED_ORIGIN = 'https://wind-calendar-feed.onrender.com';
 
-function linksFor(cid) {
+function nativeLinks(cid) {
   const encoded = encodeURIComponent(cid);
   return {
     add: 'https://calendar.google.com/calendar/render?cid=' + encoded,
     ics: 'webcal://calendar.google.com/calendar/ical/' + encoded + '/public/basic.ics',
+    label: 'Add to Google Calendar',
   };
 }
 
-function spotRow(spot, cid) {
-  if (!cid) return '';
-  const { add, ics } = linksFor(cid);
-  return `<li class="spot indent">
-    <label class="pick"><input type="checkbox" data-spot="${spot.id}"> ${spot.label}</label>
-    <span class="links">
-      <a href="${add}" target="_blank" rel="noopener">Add to Google Calendar</a>
-      <a href="${ics}">ICS</a>
-    </span>
-  </li>`;
+function customLinks(spotIds) {
+  const query = 'spots=' + spotIds.map(encodeURIComponent).join(',');
+  const host = FEED_ORIGIN.replace(/^https?:\/\//, '');
+  return {
+    add: 'webcal://' + host + '/feed.ics?' + query,
+    ics: 'https://' + host + '/feed.ics?' + query,
+    label: 'Subscribe to selected spots',
+  };
 }
 
-function regionRow(region, cid) {
-  if (!cid) return '';
-  const { add, ics } = linksFor(cid);
-  return `<li class="spot">
-    <span class="name">All of ${region.label}</span>
-    <span class="links">
-      <a href="${add}" target="_blank" rel="noopener">Add to Google Calendar</a>
-      <a href="${ics}">ICS</a>
-    </span>
-  </li>`;
-}
+function wireRegion(sectionEl, region, calendars) {
+  const boxes = [...sectionEl.querySelectorAll('input[data-spot]')];
+  const addLink = sectionEl.querySelector('a.add-link');
+  const icsLink = sectionEl.querySelector('a.ics-link');
+  const hint = sectionEl.querySelector('.hint');
 
-function wireCustomMix(regionEl, regionId) {
-  const boxes = [...regionEl.querySelectorAll('input[data-spot]')];
-  const out = regionEl.querySelector('.custom-mix a.feed-link');
-  const hint = regionEl.querySelector('.custom-mix .hint');
   function update() {
     const picked = boxes.filter(b => b.checked).map(b => b.dataset.spot);
     if (!picked.length) {
-      out.removeAttribute('href');
-      out.setAttribute('aria-disabled', 'true');
-      hint.textContent = 'Check one or more spots above to build a custom feed.';
+      addLink.removeAttribute('href');
+      icsLink.removeAttribute('href');
+      addLink.setAttribute('aria-disabled', 'true');
+      icsLink.setAttribute('aria-disabled', 'true');
+      addLink.textContent = 'Add to Google Calendar';
+      hint.textContent = 'Check at least one spot to subscribe.';
       return;
     }
-    const query = 'spots=' + picked.map(encodeURIComponent).join(',');
-    out.href = 'webcal://' + FEED_ORIGIN.replace(/^https?:\/\//, '') + '/feed.ics?' + query;
-    out.removeAttribute('aria-disabled');
-    hint.textContent = picked.length + ' spot' + (picked.length > 1 ? 's' : '') + ' selected.';
+    const allPicked = picked.length === boxes.length;
+    const { add, ics, label } = allPicked ? nativeLinks(calendars[region.id]) : customLinks(picked);
+    addLink.href = add;
+    icsLink.href = ics;
+    addLink.textContent = label;
+    addLink.removeAttribute('aria-disabled');
+    icsLink.removeAttribute('aria-disabled');
+    hint.textContent = allPicked
+      ? `All of ${region.label}.`
+      : picked.length + ' spot' + (picked.length > 1 ? 's' : '') + ' selected.';
   }
   boxes.forEach(b => b.addEventListener('change', update));
   update();
@@ -104,18 +101,20 @@ async function init() {
   container.innerHTML = regions.map(region => `
     <section class="region" data-region="${region.id}">
       <h2 class="region-label">${region.label}</h2>
-      <ul class="spots">
-        ${regionRow(region, calendars[region.id])}
-        ${region.spots.map(spot => spotRow(spot, calendars[spot.id])).join('')}
+      <ul class="picker">
+        ${region.spots.map(spot => `<li>
+          <label class="pick"><input type="checkbox" checked data-spot="${spot.id}"> ${spot.label}</label>
+        </li>`).join('')}
       </ul>
-      <div class="custom-mix">
-        <span class="name">Custom mix</span>
-        <a class="feed-link" aria-disabled="true">Subscribe to selected spots</a>
-        <span class="hint">Check one or more spots above to build a custom feed.</span>
+      <div class="subscribe-row">
+        <a class="add-link" target="_blank" rel="noopener"></a>
+        <a class="ics-link">ICS</a>
+        <span class="hint"></span>
       </div>
     </section>
   `).join('') || '<p class="error">No calendars configured yet.</p>';
-  container.querySelectorAll('.region').forEach(el => wireCustomMix(el, el.dataset.region));
+  container.querySelectorAll('.region').forEach(el =>
+    wireRegion(el, regions.find(r => r.id === el.dataset.region), calendars));
 }
 init();
 </script>
