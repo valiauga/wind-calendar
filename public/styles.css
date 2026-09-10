@@ -12,8 +12,16 @@ a { color: #97c5ff; text-underline-offset: 3px; }
 .spot .name { font-size: 17px; }
 .spot.indent .name { font-size: 15px; color: #b6b6b2; padding-left: 20px; }
 .spot .links { display: flex; gap: 20px; font-size: 14px; white-space: nowrap; }
+.spot .pick { font-size: 15px; color: #d6d6d2; padding-left: 4px; display: flex;
+              align-items: center; gap: 10px; cursor: pointer; }
+.spot .pick input { width: 16px; height: 16px; accent-color: #97c5ff; }
 .region-label { margin: 32px 0 0; }
 .region-label:first-of-type { margin-top: 0; }
+.custom-mix { display: flex; align-items: center; gap: 16px; flex-wrap: wrap;
+              padding: 12px 0 32px; font-size: 14px; }
+.custom-mix .name { font-weight: bold; }
+.custom-mix a.feed-link[aria-disabled] { color: #6b6b68; pointer-events: none; text-decoration: none; }
+.custom-mix .hint { color: #9c9c98; }
 .error { padding: 16px 0; color: #9c9c98; }
 .about { color: #b6b6b2; font-size: 14px; }
 .about p { margin: 0 0 14px; }

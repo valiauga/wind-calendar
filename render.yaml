@@ -10,3 +10,9 @@ services:
     runtime: static
     buildCommand: ""
     staticPublishPath: ./public
+  - type: web
+    name: wind-calendar-feed
+    runtime: python
+    plan: free
+    buildCommand: ""
+    startCommand: python3 feed_server.py

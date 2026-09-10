@@ -11,7 +11,7 @@ automatically.
 
 ## Architecture
 
-Two Render resources, one repo:
+Three Render resources, one repo:
 
 - **Cron Job** (`calendar_sync.py`, hourly): fetches forecasts, applies the reactive
   KNMI correction, qualifies wind windows, and reconciles events into the coast or
@@ -22,6 +22,13 @@ Two Render resources, one repo:
   free with a 100GB/month bandwidth cap at the workspace level — no backend call is
   needed to render the subscribe links, since calendar IDs are fixed at deploy time
   in `public/calendars.json`.
+- **Feed proxy** (`feed_server.py`, free Web Service): merges the already-public
+  per-spot ICS feeds into one combined feed for whatever subset of spots a visitor
+  checks within a region, since Google's native "Add to Google Calendar" button only
+  works for a calendar that already exists with fixed content — a visitor-defined
+  mix has to be a URL subscription instead. Free tier spins down after 15 min idle,
+  which is fine here: this only serves background calendar-app polling, not an
+  interactive click a visitor waits on.
 
 No database: the reactive correction re-pulls a short trailing window from KNMI's
 real-time observations endpoint on every run rather than storing anything, and Render
