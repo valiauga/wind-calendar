@@ -100,5 +100,42 @@
     "knmiStationId": null,
     "knmiStationNote": "dedicated station is NKV-operated, not KNMI - no confirmed public feed, no reactive correction in v1",
     "group": "inland"
+  },
+  {
+    "id": "zandmotor",
+    "label": "Zandmotor",
+    "name": "Zandmotor (Ter Heijde / Kijkduin)",
+    "lat": 52.052664,
+    "lon": 4.195335,
+    "shoreNormal": 268,
+    "allowSideOffshore": false,
+    "minWind": 14,
+    "strongThreshold": 19,
+    "maxWind": 32,
+    "maxGustFactor": 1.4,
+    "openWindows": [{ "from": "01-01", "to": "12-31" }],
+    "knmiStationId": null,
+    "knmiStationNote": "no verified KNMI station yet; nearest official station is Hoek van Holland, unconfirmed - no reactive correction in v1",
+    "tideStation": "hoekvanholland",
+    "tideWindowHours": 2,
+    "tideNote": "The sheltered lagoon here only fills properly around high tide; gated to Rijkswaterstaat's astronomical (weather-independent) prediction for Hoek van Holland, the nearest official tide station.",
+    "group": "coast"
+  },
+  {
+    "id": "edam",
+    "label": "Edam",
+    "name": "Edam (Markermeer, IJsselmeerdijk)",
+    "lat": 52.540169,
+    "lon": 5.052953,
+    "shoreNormal": 90,
+    "allowSideOffshore": true,
+    "minWind": 14,
+    "strongThreshold": 19,
+    "maxWind": 32,
+    "maxGustFactor": 1.4,
+    "openWindows": [{ "from": "01-01", "to": "12-31" }],
+    "knmiStationId": null,
+    "knmiStationNote": "no KNMI station; nearest lake stations are NKV-operated, not KNMI - no reactive correction in v1",
+    "group": "inland"
   }
 ]

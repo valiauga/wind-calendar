@@ -12,7 +12,8 @@ from collections import Counter
 from datetime import datetime, time, timedelta
 
 import knmi_correction
-from wind import SPOTS, ZONE, forecast, windows
+import tide
+from wind import SPOTS, ZONE, block_span, forecast, windows
 
 API = 'https://www.googleapis.com/calendar/v3'
 APP_URL = 'https://wind-calendar.onrender.com/'
@@ -59,9 +60,7 @@ class GoogleCalendar:
 
 
 def event_for(spot, block, app_url):
-    day = datetime.combine(datetime.fromisoformat(block['day']).date(), time(), ZONE)
-    begin = day + timedelta(minutes=round(block['start'] * 60))
-    end = day + timedelta(minutes=round(block['end'] * 60))
+    begin, end = block_span(block)
     speed = int(max(p['speed'] for p in block['parts']) + .5)
     direction = Counter(p['direction'] for p in block['parts']).most_common(1)[0][0]
     return {
@@ -149,7 +148,8 @@ def build_events(now, app_url, api_key=None, forecasts=None):
     """One event list per group ('coast'/'inland') AND per individual spot id --
     each qualifying event is published to both its region calendar and its own
     spot calendar. Applies the reactive KNMI correction (a no-op for spots with
-    no mapped station) before qualifying windows."""
+    no mapped station) before qualifying windows, then a tide gate (a no-op for
+    spots with no tideStation, or when tide data can't be fetched)."""
     result = {key: [] for key in calendar_keys()}
     for spot in SPOTS:
         data = forecast(spot)  # No stale fallback for calendar mutations.
@@ -163,7 +163,12 @@ def build_events(now, app_url, api_key=None, forecasts=None):
         for day in required:
             if sum(t.startswith(day) for t in data['hourly']['time']) < 23:
                 raise ValueError('Incomplete forecast day')
+        tide_series = tide.fetch_astronomical_series(spot['tideStation']) if spot.get('tideStation') else None
         for block in windows(spot, data, now.date()):
+            if spot.get('tideStation') and not tide.block_qualifies(
+                tide_series, block, spot.get('tideWindowHours', tide.DEFAULT_TOLERANCE_HOURS)
+            ):
+                continue
             event = event_for(spot, block, app_url)
             if event_time(event, 'end') > now:
                 result[spot['group']].append(event)

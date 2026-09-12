@@ -14,6 +14,7 @@ from email.utils import parsedate_to_datetime
 import urllib.parse
 import urllib.request
 from datetime import datetime, timedelta
+from datetime import time as day_start
 from pathlib import Path
 from zoneinfo import ZoneInfo
 
@@ -115,6 +116,12 @@ def validate(data):
             raise ValueError('Incomplete daylight data')
     if not set(t[:10] for t in times).issubset(daily['time']):
         raise ValueError('Missing forecast days')
+
+
+def block_span(block):
+    """Local (Europe/Amsterdam) start/end datetimes for a qualifying window block."""
+    day = datetime.combine(datetime.fromisoformat(block['day']).date(), day_start(), ZONE)
+    return day + timedelta(minutes=round(block['start'] * 60)), day + timedelta(minutes=round(block['end'] * 60))
 
 
 def wind_class(direction, normal):

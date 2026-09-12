@@ -1,6 +1,6 @@
 import copy
 import unittest
-from datetime import datetime, timedelta
+from datetime import datetime, timedelta, timezone
 from unittest.mock import patch
 
 import calendar_sync as sync
@@ -80,7 +80,8 @@ class SyncTests(unittest.TestCase):
             google.assert_not_called()
 
     def test_build_events_covers_groups_and_spots(self):
-        with patch.object(sync, 'forecast', return_value=ten_day_data_for()):
+        with patch.object(sync, 'forecast', return_value=ten_day_data_for()), \
+             patch.object(sync.tide, 'fetch_astronomical_series', return_value=None):
             desired = sync.build_events(self.start, sync.APP_URL)
         self.assertEqual(set(desired), {'coast', 'inland'} | {s['id'] for s in SPOTS})
         self.assertTrue(desired['coast'])
@@ -88,6 +89,34 @@ class SyncTests(unittest.TestCase):
         # Every event lands in both its spot calendar and its region calendar.
         self.assertEqual(desired['ijmuiden'], [e for e in desired['coast']
                                                 if e['extendedProperties']['private']['spot'] == 'ijmuiden'])
+
+    def test_tide_gate_excludes_zandmotor_blocks_missing_high_tide(self):
+        # High tide fixed at 00:00 UTC (02:00 CEST) every day: daylight qualifying
+        # blocks (roughly 05:00-17:30 UTC) never fall within ±2h of it. (Real tides
+        # drift ~50min/day rather than repeat on a 24h clock; this is a synthetic
+        # worst case to prove the gate wiring, not a physically realistic series.)
+        series, peak = [], datetime(2026, 9, 6, tzinfo=timezone.utc)
+        while peak < datetime(2026, 9, 20, tzinfo=timezone.utc):
+            series += [(peak - timedelta(hours=1), 0.0), (peak, 100.0), (peak + timedelta(hours=1), 0.0)]
+            peak += timedelta(hours=24)
+        series.sort()
+        with patch.object(sync, 'forecast', return_value=ten_day_data_for()), \
+             patch.object(sync.tide, 'fetch_astronomical_series', return_value=series):
+            desired = sync.build_events(self.start, sync.APP_URL)
+        self.assertEqual(desired['zandmotor'], [])
+        self.assertTrue(desired['ijmuiden'])  # Unaffected: no tideStation set.
+
+    def test_tide_gate_includes_zandmotor_blocks_overlapping_high_tide(self):
+        # High tide at noon UTC, squarely inside the daylight qualifying window.
+        series, peak = [], datetime(2026, 9, 6, 12, tzinfo=timezone.utc)
+        while peak < datetime(2026, 9, 20, tzinfo=timezone.utc):
+            series += [(peak - timedelta(hours=1), 0.0), (peak, 100.0), (peak + timedelta(hours=1), 0.0)]
+            peak += timedelta(hours=24)
+        series.sort()
+        with patch.object(sync, 'forecast', return_value=ten_day_data_for()), \
+             patch.object(sync.tide, 'fetch_astronomical_series', return_value=series):
+            desired = sync.build_events(self.start, sync.APP_URL)
+        self.assertTrue(desired['zandmotor'])
 
     def test_pagination_and_ownership_filter(self):
         api = sync.GoogleCalendar('test')

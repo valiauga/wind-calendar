@@ -16,3 +16,13 @@ services:
     plan: free
     buildCommand: ""
     startCommand: python3 feed_server.py
+    envVars:
+      - key: REDIS_URL
+        fromService:
+          type: keyvalue
+          name: wind-calendar-kv
+          property: connectionString
+  - type: keyvalue
+    name: wind-calendar-kv
+    plan: free
+    ipAllowList: []

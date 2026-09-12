@@ -1,8 +1,8 @@
 import copy
 import unittest
-from datetime import date
+from datetime import date, datetime
 
-from wind import SPOTS, windows
+from wind import SPOTS, ZONE, block_span, windows
 
 
 def data_for(day='2026-09-07', speeds=None, sunset='19:30'):
@@ -40,6 +40,12 @@ class WindTests(unittest.TestCase):
         spot['shoreNormal'] = 285
         data = data_for('2026-10-01')
         self.assertEqual(windows(spot, data, date(2026, 10, 1)), [])
+
+    def test_block_span_is_local_aware_datetime(self):
+        block = windows(SPOTS[0], data_for(), date(2026, 9, 7))[0]
+        begin, end = block_span(block)
+        self.assertEqual((begin, end), (datetime(2026, 9, 7, 7, 0, tzinfo=ZONE),
+                                         datetime(2026, 9, 7, 19, 30, tzinfo=ZONE)))
 
     def test_no_travel_gating(self):
         """The source project skips marginal wind at far spots; this fork qualifies

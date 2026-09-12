@@ -6,10 +6,18 @@ visitor-defined combination -- that mechanism only works for a calendar that
 already exists with fixed content. No events are generated here; this only
 re-fetches and concatenates the VEVENT blocks each spot's own public calendar
 already serves.
+
+Also mints and updates persistent "mix" tokens (/mix, /mix/<token>) so a
+visitor's subscribe link stays the same URL even after they change which
+spots it covers -- calendar apps refresh the same subscription with new
+content instead of needing a whole new subscription. Requires REDIS_URL
+(kv_store.py); without it, /mix responds 503 and the site falls back to
+plain ?spots= links that do need a resubscribe on change.
 """
 import json
 import os
 import re
+import secrets
 import time
 import threading
 import urllib.error
@@ -18,11 +26,14 @@ import urllib.request
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from pathlib import Path
 
+import kv_store
+
 ROOT = Path(__file__).resolve().parent
 SPOTS = json.loads((ROOT / 'spots.json').read_text())
 CALENDARS = json.loads((ROOT / 'public' / 'calendars.json').read_text())
 SPOT_IDS = {s['id'] for s in SPOTS}
 CACHE_SECONDS = 900
+MIX_KEY_PREFIX = 'mix:'
 _cache = {}
 _cache_lock = threading.Lock()
 
@@ -65,9 +76,62 @@ def merged_feed(spot_ids):
     return body
 
 
+def spots_for_token(token):
+    """Returns a spot id list, or None if the token is unknown/expired/unconfigured."""
+    raw = kv_store.get(MIX_KEY_PREFIX + token)
+    if raw is None:
+        return None
+    try:
+        spots = json.loads(raw)
+    except ValueError:
+        return None
+    return [s for s in spots if s in SPOT_IDS]
+
+
+def store_mix(token, spot_ids):
+    return kv_store.set_with_ttl(MIX_KEY_PREFIX + token, json.dumps(sorted(spot_ids)))
+
+
 class Handler(BaseHTTPRequestHandler):
     def log_message(self, *args):
         pass  # Avoid logging query strings; they're not sensitive here but keep it minimal.
+
+    def _cors_headers(self):
+        self.send_header('Access-Control-Allow-Origin', '*')
+        self.send_header('Access-Control-Allow-Methods', 'GET, POST, PUT, OPTIONS')
+        self.send_header('Access-Control-Allow-Headers', 'Content-Type')
+
+    def _json(self, status, payload):
+        body = json.dumps(payload).encode('utf-8')
+        self.send_response(status)
+        self.send_header('Content-Type', 'application/json; charset=utf-8')
+        self._cors_headers()
+        self.end_headers()
+        self.wfile.write(body)
+
+    def _read_json_body(self):
+        length = int(self.headers.get('Content-Length', 0) or 0)
+        if not length or length > 8192:
+            return None
+        try:
+            return json.loads(self.rfile.read(length).decode('utf-8'))
+        except ValueError:
+            return None
+
+    def _valid_spot_list(self, payload):
+        if not isinstance(payload, dict):
+            return None
+        spots = payload.get('spots')
+        if not isinstance(spots, list) or not spots:
+            return None
+        if any(s not in SPOT_IDS for s in spots):
+            return None
+        return spots
+
+    def do_OPTIONS(self):
+        self.send_response(204)
+        self._cors_headers()
+        self.end_headers()
 
     def do_GET(self):
         parsed = urllib.parse.urlsplit(self.path)
@@ -75,14 +139,25 @@ class Handler(BaseHTTPRequestHandler):
             self.send_response(404)
             self.end_headers()
             return
-        requested = [s for s in urllib.parse.parse_qs(parsed.query).get('spots', [''])[0].split(',') if s]
-        unknown = [s for s in requested if s not in SPOT_IDS]
-        if not requested or unknown:
-            self.send_response(400)
-            self.send_header('Content-Type', 'text/plain; charset=utf-8')
-            self.end_headers()
-            self.wfile.write(('Unknown or missing spot ids: ' + ', '.join(unknown or ['(none given)'])).encode())
-            return
+        query = urllib.parse.parse_qs(parsed.query)
+        token = query.get('token', [''])[0]
+        if token:
+            requested = spots_for_token(token)
+            if not requested:
+                self.send_response(404)
+                self.send_header('Content-Type', 'text/plain; charset=utf-8')
+                self.end_headers()
+                self.wfile.write(b'Unknown or expired link. Recreate it from the site.')
+                return
+        else:
+            requested = [s for s in query.get('spots', [''])[0].split(',') if s]
+            unknown = [s for s in requested if s not in SPOT_IDS]
+            if not requested or unknown:
+                self.send_response(400)
+                self.send_header('Content-Type', 'text/plain; charset=utf-8')
+                self.end_headers()
+                self.wfile.write(('Unknown or missing spot ids: ' + ', '.join(unknown or ['(none given)'])).encode())
+                return
         try:
             body = merged_feed(requested).encode('utf-8')
         except (urllib.error.URLError, urllib.error.HTTPError, TimeoutError):
@@ -97,6 +172,38 @@ class Handler(BaseHTTPRequestHandler):
         self.send_header('Access-Control-Allow-Origin', '*')
         self.end_headers()
         self.wfile.write(body)
+
+    def do_POST(self):
+        if self.path != '/mix':
+            self.send_response(404)
+            self.end_headers()
+            return
+        spots = self._valid_spot_list(self._read_json_body())
+        if spots is None:
+            self._json(400, {'error': 'Body must be {"spots": [known spot ids]}'})
+            return
+        token = secrets.token_urlsafe(16)
+        if not store_mix(token, spots):
+            self._json(503, {'error': 'Persistent links are not configured yet.'})
+            return
+        self._json(200, {'token': token})
+
+    def do_PUT(self):
+        parsed = urllib.parse.urlsplit(self.path)
+        match = re.fullmatch(r'/mix/([A-Za-z0-9_-]{8,64})', parsed.path)
+        if not match:
+            self.send_response(404)
+            self.end_headers()
+            return
+        spots = self._valid_spot_list(self._read_json_body())
+        if spots is None:
+            self._json(400, {'error': 'Body must be {"spots": [known spot ids]}'})
+            return
+        token = match.group(1)
+        if not store_mix(token, spots):
+            self._json(503, {'error': 'Persistent links are not configured yet.'})
+            return
+        self._json(200, {'token': token})
 
 
 def main():

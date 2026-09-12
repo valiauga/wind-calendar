@@ -11,17 +11,31 @@
 <main>
   <h1>Wind Calendar</h1>
   <p class="lede">Kitesurfing wind windows for Dutch spots, pushed straight into a Google Calendar
-    you subscribe to. No account, no app, no sign-in &mdash; pick your spots per region below.</p>
+    you subscribe to. No account, no app, no sign-in.</p>
 
-  <div id="regions"></div>
+  <div id="premade"></div>
+
+  <section class="custom-mix">
+    <h2>Create your own mix</h2>
+    <p class="lede">Only want a few spots, from either region? Pick them below and get one link
+      for just that combination.</p>
+    <div id="custom-groups"></div>
+    <div class="subscribe-row">
+      <button type="button" class="copy-link" hidden></button>
+      <a class="ics-link"></a>
+      <span class="hint"></span>
+    </div>
+  </section>
 
   <section class="about">
     <h2>How it works</h2>
-    <p>Every spot is checked by default, so <strong>Add to Google Calendar</strong> adds the whole
-      region in one click if you use Google Calendar (the <strong>ICS</strong> link works for Apple
-      Calendar, Outlook or anything else). Uncheck any spots you don't care about and the button
-      switches to a custom feed combining just what's checked.</p>
-    <p>A custom mix can't use the native one-click "Add" button &mdash; that only works for a
+    <p><strong>Coast</strong> and <strong>Inland</strong> are ready-made calendars covering every
+      spot in that group &mdash; one click with <strong>Add to Google Calendar</strong> if you use
+      Google Calendar (the <strong>ICS</strong> link works for Apple Calendar, Outlook or anything
+      else). They'll pick up any spots added to that region later automatically, no need to
+      resubscribe.</p>
+    <p>If you'd rather pick specific spots from either region, use <strong>Create your own mix</strong>
+      below instead. It can't use the native one-click "Add" button &mdash; that only works for a
       calendar that already exists with fixed content, and Google only offers it for calendars it
       already hosts. Instead you get a link: <strong>Open in Calendar app</strong> hands it to
       whatever your device's default calendar is (on a Mac that's usually Apple Calendar, even if
@@ -29,6 +43,10 @@
       controls). To get a custom mix into <em>Google</em> Calendar specifically, use <strong>Copy
       link</strong> and paste it into Google Calendar's own Settings &rarr; Add calendar &rarr; From
       URL.</p>
+    <p>That link stays yours: if you come back later and change which spots are checked, the same
+      link keeps working and your calendar app just picks up the new content on its next refresh
+      &mdash; no need to remove the old subscription and add a new one. It's tied to this browser,
+      not an account, so a different device or a cleared browser needs its own link.</p>
     <p>Events show the spot, forecast peak sustained wind and direction. They carry no attendees,
       no reminders, and are marked as free time. Forecasts update roughly hourly from GFS model
       data, with a live correction applied where a nearby KNMI weather station is available. A
@@ -39,6 +57,7 @@
 </main>
 <script>
 const FEED_ORIGIN = 'https://wind-calendar-feed.onrender.com';
+const CUSTOM_MIX_ID = 'custom';
 
 function nativeLinks(cid) {
   const encoded = encodeURIComponent(cid);
@@ -48,8 +67,10 @@ function nativeLinks(cid) {
   };
 }
 
-function customLinks(spotIds) {
-  const query = 'spots=' + spotIds.map(encodeURIComponent).join(',');
+function customLinks(spotIdsOrToken, byToken) {
+  const query = byToken
+    ? 'token=' + encodeURIComponent(spotIdsOrToken)
+    : 'spots=' + spotIdsOrToken.map(encodeURIComponent).join(',');
   const host = FEED_ORIGIN.replace(/^https?:\/\//, '');
   return {
     ics: 'webcal://' + host + '/feed.ics?' + query,
@@ -57,63 +78,138 @@ function customLinks(spotIds) {
   };
 }
 
-function wireRegion(sectionEl, region, calendars) {
+function loadToken(mixId) {
+  try { return localStorage.getItem('windcal-token-' + mixId); } catch { return null; }
+}
+function saveToken(mixId, token) {
+  try { localStorage.setItem('windcal-token-' + mixId, token); } catch {}
+}
+function loadPicks(mixId) {
+  try {
+    const raw = localStorage.getItem('windcal-picks-' + mixId);
+    return raw ? JSON.parse(raw) : null;
+  } catch { return null; }
+}
+function savePicks(mixId, spotIds) {
+  try { localStorage.setItem('windcal-picks-' + mixId, JSON.stringify(spotIds)); } catch {}
+}
+
+// Mints a token on first use, then updates that same token afterwards, so a
+// subscriber's link never changes even as their spot selection does -- their
+// calendar app just picks up new content on its next scheduled refresh.
+async function syncMix(mixId, spotIds) {
+  const existing = loadToken(mixId);
+  const url = FEED_ORIGIN + (existing ? '/mix/' + existing : '/mix');
+  const res = await fetch(url, {
+    method: existing ? 'PUT' : 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ spots: spotIds }),
+  });
+  if (!res.ok) throw new Error('mix sync failed: ' + res.status);
+  const data = await res.json();
+  saveToken(mixId, data.token);
+  return data.token;
+}
+
+function renderPremade(regions, calendars) {
+  return regions.map(region => {
+    const { add, ics } = nativeLinks(calendars[region.id]);
+    const spotLabels = region.spots.map(s => s.label).join(', ');
+    return `
+      <section class="region">
+        <h2 class="region-label">${region.label}</h2>
+        <p class="region-spots">${spotLabels}</p>
+        <div class="subscribe-row">
+          <a class="add-link" href="${add}" target="_blank" rel="noopener">Add to Google Calendar</a>
+          <a class="ics-link" href="${ics}">Open in Calendar app</a>
+        </div>
+      </section>`;
+  }).join('');
+}
+
+function renderCustomGroups(regions) {
+  return regions.map(region => `
+    <div class="custom-group">
+      <h3 class="custom-group-label">${region.label}</h3>
+      <ul class="picker">
+        ${region.spots.map(spot => `<li>
+          <label class="pick"><input type="checkbox" data-spot="${spot.id}"> ${spot.label}</label>
+        </li>`).join('')}
+      </ul>
+    </div>
+  `).join('');
+}
+
+function wireCustomMix(sectionEl) {
   const boxes = [...sectionEl.querySelectorAll('input[data-spot]')];
-  const addLink = sectionEl.querySelector('a.add-link');
   const icsLink = sectionEl.querySelector('a.ics-link');
   const copyBtn = sectionEl.querySelector('button.copy-link');
   const hint = sectionEl.querySelector('.hint');
+  let updateSeq = 0;
+
+  const remembered = loadPicks(CUSTOM_MIX_ID);
+  if (remembered) {
+    boxes.forEach(b => { b.checked = remembered.includes(b.dataset.spot); });
+  }
+
+  function wireCopy(text) {
+    copyBtn.onclick = async () => {
+      try {
+        await navigator.clipboard.writeText(text);
+        copyBtn.textContent = 'Copied! Paste into Google Calendar → Settings → Add calendar → From URL';
+      } catch {
+        copyBtn.textContent = text;
+      }
+    };
+  }
 
   function update() {
     const picked = boxes.filter(b => b.checked).map(b => b.dataset.spot);
-    copyBtn.textContent = 'Copy link for Google Calendar';
+    savePicks(CUSTOM_MIX_ID, picked);
     if (!picked.length) {
-      addLink.hidden = false;
-      addLink.removeAttribute('href');
-      addLink.setAttribute('aria-disabled', 'true');
-      addLink.textContent = 'Add to Google Calendar';
       icsLink.removeAttribute('href');
       icsLink.setAttribute('aria-disabled', 'true');
+      icsLink.textContent = 'Open in Calendar app';
       copyBtn.hidden = true;
-      hint.textContent = 'Check at least one spot to subscribe.';
+      hint.textContent = 'Check at least one spot to build a link.';
       return;
     }
-    const allPicked = picked.length === boxes.length;
     icsLink.removeAttribute('aria-disabled');
-    if (allPicked) {
-      const { add, ics } = nativeLinks(calendars[region.id]);
-      addLink.hidden = false;
-      addLink.href = add;
-      addLink.textContent = 'Add to Google Calendar';
-      addLink.removeAttribute('aria-disabled');
+    copyBtn.hidden = false;
+    hint.textContent = picked.length + ' spot' + (picked.length > 1 ? 's' : '') + ' selected.';
+
+    // Show a working link immediately (old-style, static ?spots= URL) while
+    // the persistent token request is in flight, then upgrade both links in
+    // place once it resolves -- if it fails (store not configured yet, or a
+    // cold-started free instance timing out), stay on the static fallback.
+    const fallback = customLinks(picked, false);
+    icsLink.href = fallback.ics;
+    icsLink.textContent = 'Open in Calendar app';
+    copyBtn.disabled = true;
+    copyBtn.textContent = 'Preparing link…';
+    wireCopy(fallback.plain);
+
+    const seq = ++updateSeq;
+    syncMix(CUSTOM_MIX_ID, picked).then(token => {
+      if (seq !== updateSeq) return;
+      const { ics, plain } = customLinks(token, true);
       icsLink.href = ics;
-      icsLink.textContent = 'Open in Calendar app';
-      copyBtn.hidden = true;
-    } else {
-      const { ics, plain } = customLinks(picked);
-      addLink.hidden = true;
-      icsLink.href = ics;
-      icsLink.textContent = 'Open in Calendar app';
-      copyBtn.hidden = false;
-      copyBtn.onclick = async () => {
-        try {
-          await navigator.clipboard.writeText(plain);
-          copyBtn.textContent = 'Copied! Paste into Google Calendar → Settings → Add calendar → From URL';
-        } catch {
-          copyBtn.textContent = plain;
-        }
-      };
-    }
-    hint.textContent = allPicked
-      ? `All of ${region.label}.`
-      : picked.length + ' spot' + (picked.length > 1 ? 's' : '') + ' selected.';
+      copyBtn.disabled = false;
+      copyBtn.textContent = 'Copy link for Google Calendar';
+      wireCopy(plain);
+    }).catch(() => {
+      if (seq !== updateSeq) return;
+      copyBtn.disabled = false;
+      copyBtn.textContent = 'Copy link for Google Calendar';
+    });
   }
   boxes.forEach(b => b.addEventListener('change', update));
   update();
 }
 
 async function init() {
-  const container = document.getElementById('regions');
+  const premadeEl = document.getElementById('premade');
+  const customGroupsEl = document.getElementById('custom-groups');
   let regions, calendars;
   try {
     [regions, calendars] = await Promise.all([
@@ -121,27 +217,16 @@ async function init() {
       fetch('calendars.json').then(r => r.json()),
     ]);
   } catch {
-    container.innerHTML = '<p class="error">Could not load spot list. Try reloading.</p>';
+    premadeEl.innerHTML = '<p class="error">Could not load spot list. Try reloading.</p>';
     return;
   }
-  container.innerHTML = regions.map(region => `
-    <section class="region" data-region="${region.id}">
-      <h2 class="region-label">${region.label}</h2>
-      <ul class="picker">
-        ${region.spots.map(spot => `<li>
-          <label class="pick"><input type="checkbox" checked data-spot="${spot.id}"> ${spot.label}</label>
-        </li>`).join('')}
-      </ul>
-      <div class="subscribe-row">
-        <a class="add-link" target="_blank" rel="noopener"></a>
-        <button type="button" class="copy-link" hidden></button>
-        <a class="ics-link"></a>
-        <span class="hint"></span>
-      </div>
-    </section>
-  `).join('') || '<p class="error">No calendars configured yet.</p>';
-  container.querySelectorAll('.region').forEach(el =>
-    wireRegion(el, regions.find(r => r.id === el.dataset.region), calendars));
+  if (!regions.length) {
+    premadeEl.innerHTML = '<p class="error">No calendars configured yet.</p>';
+    return;
+  }
+  premadeEl.innerHTML = renderPremade(regions, calendars);
+  customGroupsEl.innerHTML = renderCustomGroups(regions);
+  wireCustomMix(document.querySelector('.custom-mix'));
 }
 init();
 </script>
