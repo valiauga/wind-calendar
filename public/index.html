@@ -15,20 +15,59 @@
 
   <div id="premade"></div>
 
-  <section class="custom-mix card">
-    <h2>Create your own mix</h2>
-    <p class="lede">Only want a few spots, from either region? Pick them below and get one link
-      for just that combination.</p>
-    <div id="custom-groups"></div>
-    <div class="subscribe-row">
-      <button type="button" class="btn btn-primary copy-link" hidden></button>
-      <a class="btn btn-secondary ics-link"></a>
-      <span class="hint"></span>
+  <details class="custom-mix collapsible card">
+    <summary>
+      <h2>Create your own mix</h2>
+      <span class="summary-hint">Pick specific spots from either region</span>
+      <svg class="chevron" viewBox="0 0 20 20" fill="none" xmlns="http://www.w3.org/2000/svg" aria-hidden="true">
+        <path d="M5 7.5L10 12.5L15 7.5" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"/>
+      </svg>
+    </summary>
+    <div class="collapsible-body">
+      <p class="lede">Only want a few spots, from either region? Pick them below and get one link
+        for just that combination.</p>
+      <div id="custom-groups"></div>
+      <div class="subscribe-row">
+        <button type="button" class="btn btn-primary copy-link" hidden></button>
+        <a class="btn btn-secondary ics-link"></a>
+        <span class="hint"></span>
+      </div>
     </div>
-  </section>
+  </details>
 
-  <section class="about">
-    <h2>How it works</h2>
+  <details class="support collapsible card">
+    <summary>
+      <h2>Feedback &amp; support</h2>
+      <span class="summary-hint">Send a note, or buy me a coffee</span>
+      <svg class="chevron" viewBox="0 0 20 20" fill="none" xmlns="http://www.w3.org/2000/svg" aria-hidden="true">
+        <path d="M5 7.5L10 12.5L15 7.5" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"/>
+      </svg>
+    </summary>
+    <div class="collapsible-body">
+      <p class="lede">Found a bug, want another spot added, or just have thoughts? Send a note below.</p>
+      <form class="feedback-form">
+        <textarea name="message" placeholder="Your feedback…" required></textarea>
+        <input type="email" name="contact" placeholder="Email (optional, if you'd like a reply)">
+        <div class="row">
+          <button type="submit" class="btn btn-primary">Send feedback</button>
+          <span class="status"></span>
+        </div>
+      </form>
+      <div class="coffee-row" hidden>
+        <p>If this saves you checking three weather apps before a session:</p>
+        <a class="btn btn-secondary coffee-link" href="#" target="_blank" rel="noopener">☕ Buy me a coffee</a>
+      </div>
+    </div>
+  </details>
+
+  <details class="about collapsible card">
+    <summary>
+      <h2>How it works</h2>
+      <svg class="chevron" viewBox="0 0 20 20" fill="none" xmlns="http://www.w3.org/2000/svg" aria-hidden="true">
+        <path d="M5 7.5L10 12.5L15 7.5" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"/>
+      </svg>
+    </summary>
+    <div class="collapsible-body">
     <p><strong>Coast</strong> and <strong>Inland</strong> are ready-made calendars covering every
       spot in that group &mdash; one click with <strong>Add to Google Calendar</strong> if you use
       Google Calendar (the <strong>ICS</strong> link works for Apple Calendar, Outlook or anything
@@ -53,7 +92,8 @@
       custom mix (and any ICS link) refreshes roughly once a day, on that app's own schedule, not
       something this site controls.</p>
     <p><a href="privacy.html">Privacy policy</a></p>
-  </section>
+    </div>
+  </details>
 </main>
 <script>
 const FEED_ORIGIN = 'https://wind-calendar-feed.onrender.com';
@@ -67,12 +107,133 @@ function nativeLinks(cid) {
   };
 }
 
-function embedSrc(cid) {
-  const params = new URLSearchParams({
-    src: cid, ctz: 'Europe/Amsterdam', mode: 'WEEK', showTitle: '0', showNav: '1',
-    showTabs: '0', showCalendars: '0', showTz: '0', showPrint: '0', wkst: '2',
+// -- Minimalist week-ahead line chart, drawn from each spot's own public ICS
+// feed (proxied through feed_server so the browser can actually read the
+// response body -- Google's own ics export doesn't send CORS headers).
+const CHART_DAYS = 7;
+const CHART_START_HOUR = 6;
+const CHART_END_HOUR = 21;
+const CHART_LABEL_WIDTH = 88;
+const CHART_DAY_WIDTH = 78;
+const CHART_ROW_HEIGHT = 32;
+const CHART_HEADER_HEIGHT = 26;
+
+function unfoldIcs(text) {
+  return text.replace(/\r\n[ \t]/g, '');
+}
+
+function parseIcsEvents(text) {
+  const blocks = unfoldIcs(text).match(/BEGIN:VEVENT[\s\S]*?END:VEVENT/g) || [];
+  return blocks.map(block => {
+    const start = block.match(/DTSTART[^:]*:(\d{8}T\d{6})(Z?)/);
+    const end = block.match(/DTEND[^:]*:(\d{8}T\d{6})(Z?)/);
+    const summary = block.match(/SUMMARY:(.*)/);
+    if (!start || !end || !summary) return null;
+    return {
+      start: parseIcsStamp(start[1], !!start[2]),
+      end: parseIcsStamp(end[1], !!end[2]),
+      summary: summary[1].trim(),
+    };
+  }).filter(Boolean);
+}
+
+// Google's ICS export writes these in UTC (a trailing Z), not the
+// Europe/Amsterdam wall-clock time the event was created with -- convert
+// back to Amsterdam local time, since that's what the day/hour grid means.
+const AMSTERDAM_FORMATTER = new Intl.DateTimeFormat('en-GB', {
+  timeZone: 'Europe/Amsterdam', year: 'numeric', month: '2-digit', day: '2-digit',
+  hour: '2-digit', minute: '2-digit', hour12: false,
+});
+
+function parseIcsStamp(stamp, isUtc) {
+  const year = +stamp.slice(0, 4), month = +stamp.slice(4, 6), day = +stamp.slice(6, 8);
+  const hour = +stamp.slice(9, 11), minute = +stamp.slice(11, 13);
+  if (!isUtc) return { year, month, day, hour, minute };
+  const utcDate = new Date(Date.UTC(year, month - 1, day, hour, minute));
+  const parts = Object.fromEntries(AMSTERDAM_FORMATTER.formatToParts(utcDate).map(p => [p.type, p.value]));
+  return {
+    year: +parts.year, month: +parts.month, day: +parts.day,
+    hour: parts.hour === '24' ? 0 : +parts.hour, minute: +parts.minute,
+  };
+}
+
+function sameDate(a, b) {
+  return a.year === b.year && a.month === b.month && a.day === b.day;
+}
+
+function escapeXml(text) {
+  return text.replace(/[&<>"]/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c]));
+}
+
+function amsterdamNow() {
+  return parseIcsStamp(new Date().toISOString().replace(/[-:]/g, '').slice(0, 15), true);
+}
+
+function weekAheadDates() {
+  const now = amsterdamNow();
+  const today = new Date(Date.UTC(now.year, now.month - 1, now.day));
+  return Array.from({ length: CHART_DAYS }, (_, i) => {
+    const d = new Date(today);
+    d.setUTCDate(d.getUTCDate() + i);
+    return { year: d.getUTCFullYear(), month: d.getUTCMonth() + 1, day: d.getUTCDate(),
+             label: d.toLocaleDateString('en-GB', { weekday: 'short', timeZone: 'UTC' }).toUpperCase() + ' ' + d.getUTCDate() };
   });
-  return 'https://calendar.google.com/calendar/embed?' + params;
+}
+
+function weekChartSvg(region, eventsBySpot) {
+  const days = weekAheadDates();
+  const width = CHART_LABEL_WIDTH + CHART_DAYS * CHART_DAY_WIDTH;
+  const height = CHART_HEADER_HEIGHT + region.spots.length * CHART_ROW_HEIGHT + 6;
+
+  const dayLabels = days.map((d, i) => {
+    const x = CHART_LABEL_WIDTH + i * CHART_DAY_WIDTH + CHART_DAY_WIDTH / 2;
+    return `<text x="${x}" y="16" text-anchor="middle" class="chart-day${i === 0 ? ' chart-day-today' : ''}">${d.label}</text>`;
+  }).join('');
+
+  const dividers = Array.from({ length: CHART_DAYS + 1 }, (_, i) => {
+    const x = CHART_LABEL_WIDTH + i * CHART_DAY_WIDTH;
+    return `<line x1="${x}" y1="${CHART_HEADER_HEIGHT}" x2="${x}" y2="${height}" class="chart-divider"/>`;
+  }).join('');
+
+  const rows = region.spots.map((spot, i) => {
+    const y = CHART_HEADER_HEIGHT + i * CHART_ROW_HEIGHT + CHART_ROW_HEIGHT / 2;
+    const label = `<text x="${CHART_LABEL_WIDTH - 10}" y="${y + 4}" text-anchor="end" class="chart-label">${escapeXml(spot.label)}</text>`;
+    const baseline = `<line x1="${CHART_LABEL_WIDTH}" y1="${y}" x2="${width}" y2="${y}" class="chart-baseline"/>`;
+    const blocks = (eventsBySpot[spot.id] || []).map(event => {
+      const dayIndex = days.findIndex(d => sameDate(d, event.start));
+      if (dayIndex === -1) return '';
+      const span = CHART_END_HOUR - CHART_START_HOUR;
+      const startFrac = Math.min(Math.max((event.start.hour + event.start.minute / 60 - CHART_START_HOUR) / span, 0), 1);
+      const endFrac = Math.min(Math.max((event.end.hour + event.end.minute / 60 - CHART_START_HOUR) / span, 0), 1);
+      const x = CHART_LABEL_WIDTH + dayIndex * CHART_DAY_WIDTH + startFrac * CHART_DAY_WIDTH;
+      const w = Math.max((endFrac - startFrac) * CHART_DAY_WIDTH, 3);
+      return `<rect x="${x.toFixed(1)}" y="${y - 6}" width="${w.toFixed(1)}" height="12" rx="3" class="chart-block">` +
+             `<title>${escapeXml(event.summary)}</title></rect>`;
+    }).join('');
+    return label + baseline + blocks;
+  }).join('');
+
+  const now = amsterdamNow();
+  const nowFrac = Math.min(Math.max((now.hour + now.minute / 60 - CHART_START_HOUR) / (CHART_END_HOUR - CHART_START_HOUR), 0), 1);
+  const nowX = CHART_LABEL_WIDTH + nowFrac * CHART_DAY_WIDTH;
+  const nowMarker = `<line x1="${nowX.toFixed(1)}" y1="${CHART_HEADER_HEIGHT}" x2="${nowX.toFixed(1)}" y2="${height}" class="chart-now"/>`;
+
+  return `<svg viewBox="0 0 ${width} ${height}" class="week-chart" role="img" aria-label="${escapeXml(region.label)} wind windows this week">` +
+         dividers + dayLabels + rows + nowMarker + '</svg>';
+}
+
+async function loadWeekChart(region, container) {
+  try {
+    const results = await Promise.all(region.spots.map(spot =>
+      fetch(FEED_ORIGIN + '/feed.ics?spots=' + encodeURIComponent(spot.id))
+        .then(r => { if (!r.ok) throw new Error('feed fetch failed'); return r.text(); })
+        .then(text => [spot.id, parseIcsEvents(text)])
+    ));
+    const eventsBySpot = Object.fromEntries(results);
+    container.innerHTML = weekChartSvg(region, eventsBySpot);
+  } catch {
+    container.innerHTML = '<p class="error">Preview unavailable right now.</p>';
+  }
 }
 
 function customLinks(spotIdsOrToken, byToken) {
@@ -119,22 +280,50 @@ async function syncMix(mixId, spotIds) {
   return data.token;
 }
 
+// Google Calendar's own named colors, so the tip is precisely actionable --
+// pick this exact name from the calendar's color menu, not just "blue".
+const COLOR_TIPS = {
+  coast: { name: 'Blueberry', hex: '#3F51B5' },
+  inland: { name: 'Basil', hex: '#0B8043' },
+};
+
+// A tiny mockup of the calendar's own sidebar row (checkbox + name), colored
+// in -- so the tip shows exactly what to aim for, not just a swatch.
+function calendarTipHtml(tip, regionLabel) {
+  if (!tip) return '';
+  return `
+    <div class="cal-tip" role="tooltip">
+      <div class="cal-tip-row">
+        <span class="cal-tip-checkbox" style="background:${tip.hex}">
+          <svg viewBox="0 0 12 12" width="9" height="9" aria-hidden="true">
+            <path d="M2 6.2L4.8 9 10 3" fill="none" stroke="white" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"/>
+          </svg>
+        </span>
+        <span class="cal-tip-name">Wind Calendar — ${escapeXml(regionLabel)}</span>
+        <span class="cal-tip-x">&times;</span>
+        <span class="cal-tip-dots">&#8942;</span>
+      </div>
+      <p class="cal-tip-caption">Pick <strong>${escapeXml(tip.name)}</strong> from its color menu, once added</p>
+    </div>`;
+}
+
 function renderPremade(regions, calendars) {
   return regions.map(region => {
     const cid = calendars[region.id];
     const { add, ics } = nativeLinks(cid);
     const spotLabels = region.spots.map(s => s.label).join(', ');
+    const tip = COLOR_TIPS[region.id];
     return `
-      <section class="region card">
+      <section class="region card" data-region="${region.id}">
         <h2 class="region-label">${region.label}</h2>
         <p class="region-spots">${spotLabels}</p>
+        <div class="week-chart-container"><p class="error">Loading preview…</p></div>
         <div class="subscribe-row">
-          <a class="btn btn-primary add-link" href="${add}" target="_blank" rel="noopener">Add to Google Calendar</a>
+          <span class="tip-host">
+            <a class="btn btn-primary add-link" href="${add}" target="_blank" rel="noopener">Add to Google Calendar</a>
+            ${calendarTipHtml(tip, region.label)}
+          </span>
           <a class="btn btn-secondary ics-link" href="${ics}">Open in Calendar app</a>
-        </div>
-        <p class="preview-label">Live preview</p>
-        <div class="calendar-preview">
-          <iframe src="${embedSrc(cid)}" loading="lazy" title="${region.label} upcoming wind windows"></iframe>
         </div>
       </section>`;
   }).join('');
@@ -220,7 +409,34 @@ function wireCustomMix(sectionEl) {
   update();
 }
 
+function wireFeedbackForm(form) {
+  const status = form.querySelector('.status');
+  const submitBtn = form.querySelector('button[type="submit"]');
+  form.addEventListener('submit', async event => {
+    event.preventDefault();
+    const message = form.message.value.trim();
+    if (!message) return;
+    submitBtn.disabled = true;
+    status.textContent = 'Sending…';
+    try {
+      const res = await fetch(FEED_ORIGIN + '/feedback', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ message, contact: form.contact.value.trim() }),
+      });
+      if (!res.ok) throw new Error('feedback submit failed: ' + res.status);
+      form.reset();
+      status.textContent = 'Thanks, sent!';
+    } catch {
+      status.textContent = "Couldn't send right now -- try again shortly.";
+    } finally {
+      submitBtn.disabled = false;
+    }
+  });
+}
+
 async function init() {
+  wireFeedbackForm(document.querySelector('.feedback-form'));
   const premadeEl = document.getElementById('premade');
   const customGroupsEl = document.getElementById('custom-groups');
   let regions, calendars;
@@ -240,6 +456,10 @@ async function init() {
   premadeEl.innerHTML = renderPremade(regions, calendars);
   customGroupsEl.innerHTML = renderCustomGroups(regions);
   wireCustomMix(document.querySelector('.custom-mix'));
+  regions.forEach(region => {
+    const container = premadeEl.querySelector(`[data-region="${region.id}"] .week-chart-container`);
+    loadWeekChart(region, container);
+  });
 }
 init();
 </script>

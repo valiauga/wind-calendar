@@ -69,6 +69,11 @@ def _read_reply(sock):
             return None
         data = _read_exact(sock, length + 2)
         return data[:-2].decode('utf-8')
+    if kind == b'*':
+        count = int(rest)
+        if count == -1:
+            return None
+        return [_read_reply(sock) for _ in range(count)]
     raise RuntimeError('Unexpected RESP reply: ' + kind.decode(errors='replace') + rest.decode(errors='replace'))
 
 
@@ -90,5 +95,29 @@ def set_with_ttl(key, value, ttl_seconds=TOKEN_TTL_SECONDS):
     try:
         _command(sock, 'SET', key, value, 'EX', ttl_seconds)
         return True
+    finally:
+        sock.close()
+
+
+def rpush(key, value):
+    """Appends to a list, creating it if needed. Returns False (no-op) when
+    REDIS_URL isn't configured, True once stored."""
+    sock = _connect()
+    if sock is None:
+        return False
+    try:
+        _command(sock, 'RPUSH', key, value)
+        return True
+    finally:
+        sock.close()
+
+
+def lrange(key, start, stop):
+    """Returns a list of stored values (empty if the key is missing or unset)."""
+    sock = _connect()
+    if sock is None:
+        return []
+    try:
+        return _command(sock, 'LRANGE', key, start, stop) or []
     finally:
         sock.close()

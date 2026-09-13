@@ -69,12 +69,28 @@ class FeedServerTests(unittest.TestCase):
             self.assertTrue(feed_server.store_mix('abc', ['muiderberg', 'ijmuiden']))
         mocked.assert_called_once_with('mix:abc', json.dumps(['ijmuiden', 'muiderberg']))
 
+    def test_store_feedback_delegates_to_kv_store(self):
+        with patch('feed_server.kv_store.rpush', return_value=True) as mocked:
+            self.assertTrue(feed_server.store_feedback('Great site!', 'me@example.com'))
+        key, raw = mocked.call_args[0]
+        self.assertEqual(key, feed_server.FEEDBACK_KEY)
+        entry = json.loads(raw)
+        self.assertEqual(entry['message'], 'Great site!')
+        self.assertEqual(entry['contact'], 'me@example.com')
+        self.assertIn('receivedAt', entry)
+
+    def test_read_feedback_skips_malformed_entries_and_reverses(self):
+        with patch('feed_server.kv_store.lrange', return_value=['{"message":"first"}', 'not json', '{"message":"second"}']):
+            result = feed_server.read_feedback()
+        self.assertEqual([e['message'] for e in result], ['second', 'first'])
+
 
 class FakeKvStore:
     """In-memory stand-in for kv_store, keyed exactly like the real one."""
 
     def __init__(self):
         self._data = {}
+        self._lists = {}
 
     def get(self, key):
         return self._data.get(key)
@@ -82,6 +98,14 @@ class FakeKvStore:
     def set_with_ttl(self, key, value, ttl_seconds=None):
         self._data[key] = value
         return True
+
+    def rpush(self, key, value):
+        self._lists.setdefault(key, []).append(value)
+        return True
+
+    def lrange(self, key, start, stop):
+        values = self._lists.get(key, [])
+        return values[start:] if stop == -1 else values[start:stop + 1]
 
 
 class MixEndpointTests(unittest.TestCase):
@@ -93,6 +117,7 @@ class MixEndpointTests(unittest.TestCase):
         cls.fake_kv = FakeKvStore()
         cls._kv_patch = patch.multiple(
             'feed_server.kv_store', get=cls.fake_kv.get, set_with_ttl=cls.fake_kv.set_with_ttl,
+            rpush=cls.fake_kv.rpush, lrange=cls.fake_kv.lrange,
         )
         cls._kv_patch.start()
         cls.server = ThreadingHTTPServer(('127.0.0.1', 0), feed_server.Handler)
@@ -155,6 +180,33 @@ class MixEndpointTests(unittest.TestCase):
         with self.assertRaises(urllib.error.HTTPError) as cm:
             urllib.request.urlopen(self.base_url + '/feed.ics?token=does-not-exist')
         self.assertEqual(cm.exception.code, 404)
+
+    def test_post_feedback_rejects_empty_message(self):
+        with self.assertRaises(urllib.error.HTTPError) as cm:
+            self._post_json('/feedback', {'message': '   '})
+        self.assertEqual(cm.exception.code, 400)
+
+    def test_post_then_admin_reads_feedback(self):
+        with patch.dict('os.environ', {'FEEDBACK_ADMIN_TOKEN': 'letmein'}):
+            status, body = self._post_json('/feedback', {'message': 'Love it!', 'contact': 'a@b.com'})
+            self.assertEqual(status, 200)
+            self.assertEqual(body, {'ok': True})
+            with urllib.request.urlopen(self.base_url + '/feedback?token=letmein') as resp:
+                result = json.loads(resp.read())
+        self.assertEqual(result['feedback'][0]['message'], 'Love it!')
+        self.assertEqual(result['feedback'][0]['contact'], 'a@b.com')
+
+    def test_get_feedback_rejects_wrong_admin_token(self):
+        with patch.dict('os.environ', {'FEEDBACK_ADMIN_TOKEN': 'letmein'}):
+            with self.assertRaises(urllib.error.HTTPError) as cm:
+                urllib.request.urlopen(self.base_url + '/feedback?token=wrong')
+        self.assertEqual(cm.exception.code, 403)
+
+    def test_get_feedback_rejects_when_admin_token_unset(self):
+        with patch.dict('os.environ', {}, clear=True):
+            with self.assertRaises(urllib.error.HTTPError) as cm:
+                urllib.request.urlopen(self.base_url + '/feedback?token=anything')
+        self.assertEqual(cm.exception.code, 403)
 
 
 if __name__ == '__main__':

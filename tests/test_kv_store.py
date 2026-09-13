@@ -62,6 +62,31 @@ class KvStoreTests(unittest.TestCase):
             with self.assertRaises(RuntimeError):
                 kv_store.get('mix:abc')
 
+    def test_rpush_returns_false_without_redis_url(self):
+        with patch.dict('os.environ', {}, clear=True):
+            self.assertFalse(kv_store.rpush('feedback:all', '{}'))
+
+    def test_rpush_parses_integer_reply(self):
+        sock = FakeSocket([b':3\r\n'])
+        with patch.object(kv_store, '_connect', return_value=sock):
+            self.assertTrue(kv_store.rpush('feedback:all', '{"message":"hi"}'))
+        self.assertIn(b'RPUSH', sock.sent)
+
+    def test_lrange_returns_empty_without_redis_url(self):
+        with patch.dict('os.environ', {}, clear=True):
+            self.assertEqual(kv_store.lrange('feedback:all', 0, -1), [])
+
+    def test_lrange_parses_array_reply(self):
+        sock = FakeSocket([b'*2\r\n$7\r\n{"a":1}\r\n$7\r\n{"b":2}\r\n'])
+        with patch.object(kv_store, '_connect', return_value=sock):
+            result = kv_store.lrange('feedback:all', 0, -1)
+        self.assertEqual(result, ['{"a":1}', '{"b":2}'])
+
+    def test_lrange_parses_empty_array_reply(self):
+        sock = FakeSocket([b'*0\r\n'])
+        with patch.object(kv_store, '_connect', return_value=sock):
+            self.assertEqual(kv_store.lrange('feedback:all', 0, -1), [])
+
 
 if __name__ == '__main__':
     unittest.main()

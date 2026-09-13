@@ -56,6 +56,17 @@ third-party dependencies, same as everything else here; without `REDIS_URL` set,
 which still works, just needs a resubscribe on change. Tokens are per-browser, not
 per-account — a different device or a cleared browser needs its own link.
 
+### Feedback
+
+The "Feedback & support" card on the site posts to `/feedback` on the feed proxy,
+which appends each submission (message + optional contact) to a Redis list via
+`kv_store.rpush` — same graceful-degradation pattern as `/mix`: a `503` if
+`REDIS_URL` isn't set, no exception either way. Read submissions back by visiting
+`https://wind-calendar-feed.onrender.com/feedback?token=<FEEDBACK_ADMIN_TOKEN>` in a
+browser (newest first, as JSON) — set `FEEDBACK_ADMIN_TOKEN` (any long random
+string) as an env var on the **feed proxy** service; without it, `/feedback` GET
+always responds `403`, so there's no way to read submissions until it's set.
+
 ## Spots
 
 Ten calendars: one per region plus one per individual spot, grouped by
@@ -176,6 +187,9 @@ Render). No third-party Python packages are required.
 - `KNMI_EDR_API_KEY`: optional; omit to ship forecast-only for every spot.
 - `WIND_APP_URL`: defaults to `https://wind-calendar.onrender.com/`; override if the
   deployed URL differs.
+
+On the **feed proxy** service, set `FEEDBACK_ADMIN_TOKEN` (any long random string)
+to be able to read visitor feedback back — see Feedback above.
 
 Preview current forecast events without Google credentials or writes:
 

@@ -13,7 +13,12 @@ spots it covers -- calendar apps refresh the same subscription with new
 content instead of needing a whole new subscription. Requires REDIS_URL
 (kv_store.py); without it, /mix responds 503 and the site falls back to
 plain ?spots= links that do need a resubscribe on change.
+
+Also collects visitor feedback (POST /feedback), appended to a Redis list,
+and lets the owner read it back (GET /feedback?token=<FEEDBACK_ADMIN_TOKEN>)
+without needing direct access to the KV store itself.
 """
+import datetime
 import json
 import os
 import re
@@ -34,6 +39,9 @@ CALENDARS = json.loads((ROOT / 'public' / 'calendars.json').read_text())
 SPOT_IDS = {s['id'] for s in SPOTS}
 CACHE_SECONDS = 900
 MIX_KEY_PREFIX = 'mix:'
+FEEDBACK_KEY = 'feedback:all'
+FEEDBACK_MESSAGE_MAX = 2000
+FEEDBACK_CONTACT_MAX = 200
 _cache = {}
 _cache_lock = threading.Lock()
 
@@ -92,6 +100,26 @@ def store_mix(token, spot_ids):
     return kv_store.set_with_ttl(MIX_KEY_PREFIX + token, json.dumps(sorted(spot_ids)))
 
 
+def store_feedback(message, contact):
+    entry = {
+        'message': message, 'contact': contact,
+        'receivedAt': datetime.datetime.now(datetime.timezone.utc).isoformat(),
+    }
+    return kv_store.rpush(FEEDBACK_KEY, json.dumps(entry))
+
+
+def read_feedback():
+    """Newest first; skips any entry that fails to parse rather than 500ing."""
+    entries = []
+    for raw in kv_store.lrange(FEEDBACK_KEY, 0, -1):
+        try:
+            entries.append(json.loads(raw))
+        except ValueError:
+            continue
+    entries.reverse()
+    return entries
+
+
 class Handler(BaseHTTPRequestHandler):
     def log_message(self, *args):
         pass  # Avoid logging query strings; they're not sensitive here but keep it minimal.
@@ -128,6 +156,15 @@ class Handler(BaseHTTPRequestHandler):
             return None
         return spots
 
+    def _valid_feedback(self, payload):
+        if not isinstance(payload, dict):
+            return None
+        message = (payload.get('message') or '').strip()
+        contact = (payload.get('contact') or '').strip()
+        if not message or len(message) > FEEDBACK_MESSAGE_MAX or len(contact) > FEEDBACK_CONTACT_MAX:
+            return None
+        return message, contact
+
     def do_OPTIONS(self):
         self.send_response(204)
         self._cors_headers()
@@ -135,6 +172,9 @@ class Handler(BaseHTTPRequestHandler):
 
     def do_GET(self):
         parsed = urllib.parse.urlsplit(self.path)
+        if parsed.path == '/feedback':
+            self._handle_read_feedback(urllib.parse.parse_qs(parsed.query))
+            return
         if parsed.path != '/feed.ics':
             self.send_response(404)
             self.end_headers()
@@ -174,6 +214,9 @@ class Handler(BaseHTTPRequestHandler):
         self.wfile.write(body)
 
     def do_POST(self):
+        if self.path == '/feedback':
+            self._handle_submit_feedback()
+            return
         if self.path != '/mix':
             self.send_response(404)
             self.end_headers()
@@ -187,6 +230,25 @@ class Handler(BaseHTTPRequestHandler):
             self._json(503, {'error': 'Persistent links are not configured yet.'})
             return
         self._json(200, {'token': token})
+
+    def _handle_submit_feedback(self):
+        parsed = self._valid_feedback(self._read_json_body())
+        if parsed is None:
+            self._json(400, {'error': 'Body must be {"message": "...", "contact": "(optional)"}'})
+            return
+        message, contact = parsed
+        if not store_feedback(message, contact):
+            self._json(503, {'error': 'Feedback storage is not configured yet.'})
+            return
+        self._json(200, {'ok': True})
+
+    def _handle_read_feedback(self, query):
+        expected = os.environ.get('FEEDBACK_ADMIN_TOKEN')
+        given = query.get('token', [''])[0]
+        if not expected or not secrets.compare_digest(given, expected):
+            self._json(403, {'error': 'Missing or incorrect admin token.'})
+            return
+        self._json(200, {'feedback': read_feedback()})
 
     def do_PUT(self):
         parsed = urllib.parse.urlsplit(self.path)
